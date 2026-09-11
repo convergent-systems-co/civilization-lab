@@ -10,6 +10,7 @@ import { spawnSync } from "node:child_process";
 import { canonicalize, sha256 } from "../src/core.js";
 import {
   CALIBRATION_FAILURES,
+  calibrationToolingDistributionDigest,
   CALIBRATION_TOOLING_VERSION,
   CalibrationArchive,
   PhaseACalibrationRunner,
@@ -46,6 +47,7 @@ function syntheticAttempt(calibrationRunId, { seed, attemptId, privateKey }) {
   const evidence = { classification, error_digest: sha256(attemptId), seed, parameter_set_hash: parameterSetHash };
   const metrics = {};
   const attempt = {
+    tooling_distribution_digest: calibrationToolingDistributionDigest(), baseline_tag_commit: implementation, release_descriptor_hash: null,
     schema_version: "phase-a-calibration-manifest-2.0.0", tooling_version: CALIBRATION_TOOLING_VERSION,
     calibration_run_id: calibrationRunId, attempt_id: attemptId,
     implementation_commit: implementation, implementation_tag: implementationTag, protocol_version: protocol.protocol_version,
@@ -311,8 +313,13 @@ test("the build packages the CLI, sources, schemas and specs and excludes secret
   const staged = await temporaryDirectory("build");
   for (const entry of ["ui", "schemas", "src", "config", "validation", "scripts/build.js", "scripts/calibration-cli.js", "scripts/calibration-selector.js",
     "PILOT_0_CALIBRATION_PROTOCOL.spec.json", "PARAMETER_REGISTRY.spec.json",
-    "PRIMARY_ENDPOINT.spec.json", "ENDPOINT_CODEBOOK.spec.md"])
+    "PRIMARY_ENDPOINT.spec.json", "ENDPOINT_CODEBOOK.spec.md", "package.json", "package-lock.json"])
     await cp(join(root, entry), join(staged, entry), { recursive: true });
+  // Resolve the real tag in the source checkout, then carry its build receipt
+  // into the isolated source package (which deliberately has no .git directory).
+  const tagResolution = spawnSync("git", ["rev-parse", "--verify", "v0.1.0-pilot0^{commit}"], { cwd: root, encoding: "utf8" });
+  assert.equal(tagResolution.status, 0, tagResolution.stderr);
+  await writeFile(join(staged, "validation/BASELINE_TAG_RESOLUTION.json"), JSON.stringify({ tag: "v0.1.0-pilot0", commit: tagResolution.stdout.trim() }));
   await writeFile(join(staged, ".env"), "CALIBRATION_ATTESTOR_KEY=must-not-ship\n");
   await writeFile(join(staged, "attestor-private-key.pem"), publicKeyPem(generateKeyPairSync("ed25519").publicKey));
   await mkdir(join(staged, "calibration/runs/run-0001"), { recursive: true });

@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { verify } from "node:crypto";
 import { assert, canonicalize, clone, sha256 } from "./core.js";
 import { assertValidSchema } from "./schema.js";
-import { divideHalfEven } from "./calibration-metrics.js";
+import { divideHalfEven, decimalToScaled, fixedRatio } from "./calibration-metrics.js";
 
 const protocol = JSON.parse(readFileSync(resolve(import.meta.dirname, "../PILOT_0_CALIBRATION_PROTOCOL.spec.json"), "utf8"));
 
@@ -135,6 +135,18 @@ function fixed(value, activeProtocol) {
 export function aggregateCalibrationSelectionView(view, activeProtocol = protocol) {
   assert(Array.isArray(view) && view.length === activeProtocol.seed_panel.seeds.length, "complete calibration selection view required");
   assertTreatmentBlind(view, activeProtocol);
+  // Retain the signed-manifest API; normalize only after validating the exact
+  // frozen panel. The isolated selector's opaque DTO uses the branch below.
+  if (view.some(row => Object.hasOwn(row, "seed"))) {
+    assert(view.every(row => typeof row.seed === "string" && typeof row.parameter_set_hash === "string" && !Object.hasOwn(row, "candidate_alias")), "mixed calibration selection formats");
+    assert(canonicalize(view.map(row => row.seed).sort()) === canonicalize([...activeProtocol.seed_panel.seeds].sort()), "selection view does not contain each frozen seed exactly once");
+    const hashes = new Set(view.map(row => row.parameter_set_hash));
+    assert(hashes.size === 1, "selection view mixes parameter sets");
+    const normalizedView = view.map(row => ({ candidate_alias: row.parameter_set_hash, opaque_seed_alias: row.seed, disposition: row.disposition,
+      metrics: Object.fromEntries(Object.entries(row.metrics).map(([id, value]) => [id, { status: "OBSERVED", value }])) }));
+    const result = aggregateCalibrationSelectionView(normalizedView, activeProtocol);
+    return { parameter_set_hash: [...hashes][0], seed_ids: view.map(row => row.seed).sort(), aggregate_metrics: result.aggregate_metrics };
+  }
   const hashes = new Set(view.map(row => row.candidate_alias));
   assert(hashes.size === 1, "selection view mixes parameter sets");
   assert(new Set(view.map(row => row.opaque_seed_alias)).size === activeProtocol.seed_panel.seeds.length, "selection view does not contain each frozen seed exactly once");
@@ -180,8 +192,8 @@ export function assessCalibrationCandidate({ parameter_set_hash, seed_ids, aggre
     if (minimum !== undefined && value < minimum) failures.push({ metric_id: metric.metric_id, value, boundary: minimum, relation: "minimum" });
     if (maximum !== undefined && value > maximum) failures.push({ metric_id: metric.metric_id, value, boundary: maximum, relation: "maximum" });
     const margins = [];
-    if (minimum !== undefined) margins.push((value - minimum) / Math.max(Math.abs(minimum), 1));
-    if (maximum !== undefined) margins.push((maximum - value) / Math.max(Math.abs(maximum), 1));
+    if (minimum !== undefined) margins.push(fixedRatio(decimalToScaled(value) - decimalToScaled(minimum), decimalToScaled(Math.max(Math.abs(minimum), 1))));
+    if (maximum !== undefined) margins.push(fixedRatio(decimalToScaled(maximum) - decimalToScaled(value), decimalToScaled(Math.max(Math.abs(maximum), 1))));
     minimumMargin = Math.min(minimumMargin, ...margins);
   }
   return {

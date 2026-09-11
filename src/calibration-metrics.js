@@ -148,8 +148,7 @@ const knownPolities = polity => new Set([
 ]);
 
 function consequentialSpendPath(polity, configuration, facilities) {
-  const ownsFacility = type => Object.values(facilities ?? {}).some(item => item.owner_id === polity.id && item.type === type && item.destroyed !== true) ||
-    (configuration.initialFacilityTypes ?? []).includes(type);
+  const ownsFacility = type => Object.values(facilities ?? {}).some(item => item.owner_id === polity.id && item.type === type && item.destroyed !== true);
   const eligible = rule => (rule.prerequisites ?? []).every(id => (polity.technologies ?? []).includes(id)) &&
     (polity.credits ?? 0) >= (rule.credits ?? 0) && (polity.food ?? 0) >= (rule.food ?? 0) &&
     Object.entries(rule.resources ?? {}).every(([id, quantity]) => (polity.resources?.[id] ?? 0) >= quantity);
@@ -159,10 +158,9 @@ function consequentialSpendPath(polity, configuration, facilities) {
 
 function recruitmentAvailable(polity, configuration, facilities) {
   return Object.values(configuration.unitTypes ?? {}).some(rule => {
-    const ownsRequired = Object.values(facilities ?? {}).some(item => item.owner_id === polity.id && item.type === rule.facility && item.destroyed !== true) ||
-      (configuration.initialFacilityTypes ?? []).includes(rule.facility);
+    const ownsRequired = Object.values(facilities ?? {}).some(item => item.owner_id === polity.id && item.type === rule.facility && item.destroyed !== true);
     return ownsRequired && (rule.prerequisites ?? []).every(id => (polity.technologies ?? []).includes(id)) &&
-      affiliatedPopulation(polity) >= rule.citizens && (polity.credits ?? 0) >= rule.credits &&
+      sum(groups(polity).map(group => group.count ?? 0)) >= rule.citizens && (polity.credits ?? 0) >= rule.credits &&
       Object.entries(rule.resources ?? {}).every(([id, quantity]) => (polity.resources?.[id] ?? 0) >= quantity);
   });
 }
@@ -207,12 +205,14 @@ function relationalFacts(events, synthetic) {
 export function deriveCalibrationMetricFacts({ store, snapshots, configuration, synthetic }) {
   const events = store.events;
   const states = snapshots.map(item => item.state);
-  const first = states[0], last = states.at(-1);
+  const genesis = events.find(event => event.event_type === "RunCreated");
+  assert(genesis?.payload?.initial_state_ref, "calibration metrics require RunCreated initial state");
+  const first = readEvidencePayload(store, body(genesis).initial_state_ref), last = states.at(-1);
   const resolvedTurns = [...new Set(events.filter(event => event.event_type === "TurnResolved").map(event => event.turn))].sort((a, b) => a - b);
   const continuation = resolvedTurns.length;
   const disposition = events.filter(event => event.event_type === "RunDisposition").at(-1);
   const dispositionReason = body(disposition ?? {}).replacement_policy?.reason ?? null;
-  const objectiveEarly = continuation < 20 && ["insufficient_surviving_distinct_participants", "all_remaining_permanently_action_incapable"].includes(dispositionReason);
+  const objectiveEarly = continuation < 16 && ["insufficient_surviving_distinct_participants", "all_remaining_permanently_action_incapable"].includes(dispositionReason);
 
   const contactMechanics = new Set(["transfer", "transfer_unit", "transfer_population", "share_technology", "hostile_action", "channels"]);
   const contacts = events.filter(event => crossPolity(event) && (event.event_type === "MessageSent" || event.event_type === "BattleResolved" ||
@@ -251,7 +251,7 @@ export function deriveCalibrationMetricFacts({ store, snapshots, configuration, 
 
   const recruitmentFeasible = states.some(state => Object.values(state.polities ?? {}).some(polity => alive(polity) && recruitmentAvailable(polity, configuration, state.facilities)));
   const initialPopulation = totalAffiliated(first);
-  const depletion = snapshots.some(item => item.event.turn < 16 && initialPopulation > 0 && totalAffiliated(item.state) * 4 <= initialPopulation);
+  const depletion = snapshots.some(item => item.event.turn + 1 < 16 && initialPopulation > 0 && totalAffiliated(item.state) * 4 <= initialPopulation);
   let unitSaturatedTurns = 0, unitEligibleTurns = 0;
   for (const state of states) for (const polity of Object.values(state.polities ?? {}).filter(alive)) {
     const affiliated = affiliatedPopulation(polity); if (!affiliated) continue;
@@ -262,23 +262,24 @@ export function deriveCalibrationMetricFacts({ store, snapshots, configuration, 
   const recoveredLosses = losses.filter(loss => recoveries.some(recovery => recovery.turn >= loss.turn && (recovery.causality?.causation_ids ?? []).includes(loss.event_id))).length;
 
   const battles = events.filter(event => event.event_type === "BattleResolved");
-  const annihilation = events.some(event => event.event_type === "WorldTransition" && body(event).mechanic === "polity_elimination" && event.turn < 16);
+  const annihilation = events.some(event => event.event_type === "WorldTransition" && body(event).mechanic === "polity_elimination" && event.turn + 1 < 16);
   const finalTen = resolvedTurns.slice(-10), battleTurns = new Set(battles.map(event => event.turn));
   const perpetual = finalTen.length === 10 && finalTen.filter(turn => battleTurns.has(turn)).length >= 8;
   const action = acceptedActionTypes(events);
   const dominant = action.acceptedNonWait ? Math.max(...action.counts.values()) : 0;
 
   const discoveryTurns = [];
-  for (let index = 1; index < snapshots.length; index++) {
+  for (let index = 0; index < snapshots.length; index++) {
+    const previousState = index === 0 ? first : snapshots[index - 1].state;
     for (const id of Object.keys(snapshots[index].state.polities ?? {})) {
-      const prior = knownPolities(snapshots[index - 1].state.polities?.[id] ?? {}), next = knownPolities(snapshots[index].state.polities?.[id] ?? {});
+      const prior = knownPolities(previousState.polities?.[id] ?? {}), next = knownPolities(snapshots[index].state.polities?.[id] ?? {});
       if ([...next].some(other => other !== id && !prior.has(other))) discoveryTurns.push(snapshots[index].event.turn + 1);
     }
   }
   const firstDiscovery = discoveryTurns.length ? Math.min(...discoveryTurns) : null;
   let detectionEvents = 0, detectionEligibleTurns = 0;
-  for (let index = 1; index < snapshots.length; index++) {
-    const state = snapshots[index].state, priorState = snapshots[index - 1].state;
+  for (let index = 0; index < snapshots.length; index++) {
+    const state = snapshots[index].state, priorState = index === 0 ? first : snapshots[index - 1].state;
     if (Object.values(state.polities ?? {}).filter(alive).length >= 2) detectionEligibleTurns++;
     for (const id of Object.keys(state.polities ?? {})) {
       const prior = new Set((priorState.polities?.[id]?.reports ?? []).filter(item => item.source === "activity_detection").map(sha256));
@@ -286,7 +287,7 @@ export function deriveCalibrationMetricFacts({ store, snapshots, configuration, 
     }
   }
   const discoverableIds = Object.keys(first.polities ?? {});
-  const earlySaturation = snapshots.filter(item => item.event.turn < 5).some(item => discoverableIds.every(id => {
+  const earlySaturation = snapshots.filter(item => item.event.turn + 1 < 5).some(item => discoverableIds.every(id => {
     const polity = item.state.polities?.[id]; return !polity || discoverableIds.every(other => other === id || knownPolities(polity).has(other));
   }));
   const isolatedAt12 = discoverableIds.every(id => !snapshots.filter(item => item.event.turn < 12).some(item => [...knownPolities(item.state.polities?.[id] ?? {})].some(other => other !== id)));

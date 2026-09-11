@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "numerator",
+    "denominator",
+    "eligibility_count",
+    "value",
+    "definition_hash"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "OBSERVED",
+        "ZERO_OPPORTUNITY",
+        "CENSORED",
+        "UNEVALUABLE"
+      ]
+    },
+    "numerator": {
+      "type": "string",
+      "pattern": "^-?[0-9]+$"
+    },
+    "denominator": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "eligibility_count": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "value": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "definition_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}

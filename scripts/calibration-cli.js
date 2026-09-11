@@ -2,8 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { createPrivateKey, createPublicKey } from "node:crypto";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-import { CalibrationArchive, CALIBRATION_TOOLING_VERSION, PhaseACalibrationRunner, calibrationKeyId } from "../src/calibration-runner.js";
+import { CalibrationArchive, CALIBRATION_TOOLING_VERSION, PhaseACalibrationRunner, calibrationKeyId, loadCalibrationExecutionModule } from "../src/calibration-runner.js";
 import { calibrationProtocol, enumerateCalibrationOperations } from "../src/calibration.js";
 import { parameterRegistry } from "../src/parameters.js";
 import { sha256 } from "../src/core.js";
@@ -79,21 +78,27 @@ try {
 } else if (command === "run") {
   const authorizationPath = option("--authorization"), authorizationPublicKeyPath = option("--authorization-public-key");
   const adapterPath = option("--adapter-module"), directory = option("--archive");
+  const releasePath = option("--release-descriptor"), releasePublicPath = option("--release-public-key");
   const attestorPrivatePath = option("--attestor-private-key"), attestorPublicPath = option("--attestor-public-key");
-  if (!authorizationPath || !authorizationPublicKeyPath || !adapterPath || !directory || !attestorPrivatePath || !attestorPublicPath)
+  const evidencePublicPath = option("--evidence-public-key"), evidenceHeadPublicPath = option("--evidence-head-public-key");
+  if (!authorizationPath || !authorizationPublicKeyPath || !adapterPath || !directory || !attestorPrivatePath || !attestorPublicPath || !releasePath || !releasePublicPath)
     throw new Error("empirical calibration is not authorized without --authorization, --authorization-public-key, --adapter-module, --archive, --attestor-private-key, and --attestor-public-key");
   const authorization = JSON.parse(await readFile(resolve(authorizationPath), "utf8"));
+  const releaseDescriptor = JSON.parse(await readFile(resolve(releasePath), "utf8"));
+  const releaseTrust = await readFile(resolve(releasePublicPath), "utf8");
   const authorizationPublicKey = createPublicKey(await readFile(resolve(authorizationPublicKeyPath), "utf8"));
   const embedded = createPublicKey(authorization.public_key);
   if (calibrationKeyId(embedded) !== calibrationKeyId(authorizationPublicKey)) throw new Error("authorization capability is not bound to the external authorization trust root");
-  const module = await import(pathToFileURL(resolve(adapterPath)).href);
-  const adapter = module.calibrationAdapter;
-  if (!adapter?.contract || typeof adapter.execute !== "function") throw new Error("adapter module must export calibrationAdapter with a contract and execute function");
+  if (!evidencePublicPath || !evidenceHeadPublicPath) throw new Error("external --evidence-public-key and --evidence-head-public-key are required");
+  const adapter = await loadCalibrationExecutionModule(adapterPath, authorization, { archiveDirectory: directory,
+    authorizationTrust: authorizationPublicKey.export({ type: "spki", format: "pem" }), releaseDescriptor, releaseTrust });
   const privateKey = createPrivateKey(await readFile(resolve(attestorPrivatePath), "utf8"));
   const publicKey = createPublicKey(await readFile(resolve(attestorPublicPath), "utf8"));
   const keyId = calibrationKeyId(publicKey);
   const runner = new PhaseACalibrationRunner({ directory: resolve(directory), mode: "EMPIRICAL_CALIBRATION",
     implementationCommit: "8f06baae4cda7d6fbd9d61924b5c615f4a45ba59", executor: adapter, authorization,
+    authorizationTrust: authorizationPublicKey.export({ type: "spki", format: "pem" }), releaseDescriptor, releaseTrust,
+    evidencePublicKey: await readFile(resolve(evidencePublicPath), "utf8"), evidenceHeadPublicKey: await readFile(resolve(evidenceHeadPublicPath), "utf8"),
     attestor: { privateKey, publicKey, keyId, trustScope: "EMPIRICAL_CALIBRATION" } });
   const result = await runner.run();
   console.log(JSON.stringify(result, null, 2));
