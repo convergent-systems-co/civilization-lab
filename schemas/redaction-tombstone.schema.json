@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/redaction-tombstone.schema.json",
+  "title": "CivilizationLab Redaction Tombstone",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "tombstone_id", "artifact_ref", "field_or_range", "pre_redaction_digest", "data_class", "reason", "authority", "recorded_at", "effective_logical_time", "replay_behavior", "affected_derivations", "completeness_impact"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "tombstone_id": {"type": "string"},
+    "artifact_ref": {"type": "string"},
+    "field_or_range": {"type": "string"},
+    "pre_redaction_digest": {"type": "string"},
+    "data_class": {"type": "string"},
+    "reason": {"type": "string"},
+    "authority": {"type": "string"},
+    "recorded_at": {"type": "string"},
+    "effective_logical_time": {"type": "object"},
+    "replay_behavior": {"type": "object", "required": ["participant_view", "authorized_research_view", "analysis_status", "incomplete_status"], "properties": {"participant_view": {"type": "string"}, "authorized_research_view": {"type": "string"}, "analysis_status": {"type": "string"}, "incomplete_status": {"const": "REPLAY_INCOMPLETE_REDACTED"}}},
+    "affected_derivations": {"type": "array", "items": {"type": "string"}},
+    "completeness_impact": {"type": "object", "required": ["analysis_artifacts", "claim_eligibility", "replacement_or_exclusion_rule"]}
+  }
+}

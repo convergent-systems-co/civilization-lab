@@ -1,0 +1,100 @@
+{
+  "version": "pilot-0.1-world-apparatus-v1-provisional",
+  "executionMode": "synthetic",
+  "maxTurns": 20,
+  "map": { "width": 13, "height": 11, "contactRadius": 2 },
+  "economy": { "startingFood": 144, "foodPerCitizen": 1, "foodProductionPerFarmer": 3, "startingCredits": 80 },
+  "population": { "starting": 24, "recruitmentCost": 4, "unitSize": 4, "casualtyRatio": 1 },
+  "combat": { "attack": 10, "defense": 8, "terrainModifier": 1, "drawThreshold": 0.5 },
+  "memory": { "capacity": 240, "retrieval": "recency_then_priority" },
+  "phases": { "actionBudgetMs": 360000, "actionLimit": 64 },
+  "organizations": { "enabled": false },
+  "supply": { "enabled": false, "state": "supply_disabled_state" },
+  "worldCalibration": {
+    "status": "PROVISIONAL_NONEMPIRICAL_DEFAULTS",
+    "classification": "WORLD_CALIBRATION",
+    "version": "world-apparatus-v1",
+    "provenance": "User-authorized provisional balance defaults for BUILD and NONEMPIRICAL conformance; no empirical calibration performed",
+    "freezeStage": "before_confirmation",
+    "sensitivityRequired": true
+  },
+  "geography": {
+    "landmass": "pangea", "neutralLand": true, "neutralTerritoryStride": 3,
+    "starts": [[2,2],[10,2],[2,8]], "startRadius": 1, "contactTurns": 5,
+    "waterPermille": 150, "forestPermille": 300, "mountainPermille": 120,
+    "depositPermille": 350, "depositMinimum": 20, "depositVariation": 80,
+    "landmassModes": ["pangea", "archipelago"],
+    "terrain": {
+      "plains": { "movement": 1, "defensePermille": 1000, "detectionPenalty": 0, "fertility": 1 },
+      "forest": { "movement": 2, "defensePermille": 1300, "detectionPenalty": 1, "fertility": 1 },
+      "mountain": { "movement": 3, "defensePermille": 1700, "detectionPenalty": 1, "fertility": 0 },
+      "water": { "movement": 1, "defensePermille": 1000, "detectionPenalty": 0, "fertility": 0 }
+    }
+  },
+  "assignments": {
+    "Civilian": { "starting": 4, "cost": 0, "turns": 1, "facility": "training", "prerequisites": [] },
+    "Farmer": { "starting": 8, "cost": 2, "turns": 1, "facility": "agriculture", "prerequisites": [] },
+    "Builder": { "starting": 3, "cost": 3, "turns": 2, "facility": "industrial", "prerequisites": [] },
+    "Scientist": { "starting": 3, "cost": 4, "turns": 2, "facility": "research", "prerequisites": [] },
+    "Soldier": { "starting": 4, "cost": 3, "turns": 1, "facility": "training", "prerequisites": [] },
+    "Explorer": { "starting": 2, "cost": 2, "turns": 1, "facility": "training", "prerequisites": [] }
+  },
+  "dynamics": {
+    "citizenMovement": 2, "explorerMovement": 3, "growthPermille": 250, "growthFoodReserve": 2,
+    "shortageMortalityPermille": 100, "shortageRecovery": 1, "maximumShortage": 10,
+    "creditPerProductiveCitizen": 1, "agricultureFoodBonus": 1, "extractionPerCapacity": 2,
+    "constructionPerBuilder": 2, "repairPerBuilder": 10, "repairCreditPerBuilder": 2,
+    "upgradeCreditPerCapacity": 8, "upgradeProgressPerCapacity": 4, "maximumFacilityLevel": 3,
+    "capitalHoldTurns": 3, "siegeDamagePerTurn": 5,
+    "numericScale": 1000, "maxQuantity": 100000000, "conditionMaximum": 100,
+    "trainingDistance": 0, "minimumScientists": 1, "researchProgress": 1,
+    "intelligenceCredits": 6, "intelligenceTurns": 1,
+    "intelligenceAccuratePermille": 600, "intelligenceIncompletePermille": 250,
+    "intelligenceDetectionPermille": 350, "intelligenceAttributionPermille": 500,
+    "intelligenceErrorMinimumPermille": 500, "intelligenceErrorSpreadPermille": 1000,
+    "reconCredits": 4, "reconRadius": 3, "satelliteRadius": 5,
+    "combatMinimumHitPermille": 100, "combatMaximumHitPermille": 950,
+    "combatDamage": 50, "retaliationPermille": 750, "combinedArmsBonusPermille": 100,
+    "fortifyDefensePermille": 1300, "retreatHealth": 25,
+    "messageMaxLength": 8000, "nameMaxLength": 64,
+    "defaultUnit": "infantry", "unrestEnabled": false
+  },
+  "startingProfiles": [
+    { "resources": { "metal": 30, "fuel": 15, "crystal": 0 }, "foodBonus": 0, "creditBonus": 0, "advantages": ["metal reserves"], "disadvantages": ["no starting crystal source"] },
+    { "resources": { "metal": 0, "fuel": 30, "crystal": 15 }, "foodBonus": 0, "creditBonus": 0, "advantages": ["fuel reserves"], "disadvantages": ["no starting metal source"] },
+    { "resources": { "metal": 15, "fuel": 0, "crystal": 30 }, "foodBonus": 0, "creditBonus": 0, "advantages": ["crystal reserves"], "disadvantages": ["no starting fuel source"] }
+  ],
+  "facilityTypes": {
+    "industrial": { "hexes": 1, "capacity": 4, "credits": 12, "resources": {"metal":4}, "progress": 6, "prerequisites": [], "domain": "land" },
+    "extraction": { "hexes": 1, "capacity": 2, "credits": 10, "resources": {"metal":3}, "progress": 4, "prerequisites": [], "domain": "land" },
+    "refining": { "hexes": 1, "capacity": 2, "credits": 12, "resources": {"metal":4}, "progress": 6, "prerequisites": ["metallurgy"], "domain": "land" },
+    "agriculture": { "hexes": 1, "capacity": 8, "credits": 8, "resources": {}, "progress": 4, "prerequisites": [], "domain": "land" },
+    "research": { "hexes": 1, "capacity": 3, "credits": 15, "resources": {"crystal":2}, "progress": 6, "prerequisites": [], "domain": "land" },
+    "training": { "hexes": 1, "capacity": 8, "credits": 10, "resources": {"metal":2}, "progress": 4, "prerequisites": [], "domain": "land" },
+    "ground_military": { "hexes": 1, "capacity": 4, "credits": 14, "resources": {"metal":5}, "progress": 6, "prerequisites": [], "domain": "land" },
+    "aircraft": { "hexes": 2, "capacity": 3, "credits": 25, "resources": {"metal":8,"fuel":4}, "progress": 10, "prerequisites": ["flight"], "domain": "land" },
+    "naval_shipyard": { "hexes": 2, "capacity": 3, "credits": 24, "resources": {"metal":8}, "progress": 10, "prerequisites": ["navigation"], "domain": "coast" },
+    "carrier_complex": { "hexes": 3, "capacity": 2, "credits": 40, "resources": {"metal":12,"crystal":4}, "progress": 14, "prerequisites": ["flight","navigation"], "domain": "coast" }
+  },
+  "initialFacilityTypes": ["agriculture", "training", "industrial", "research", "ground_military"],
+  "technologies": {
+    "agronomy": { "scientists": 1, "turns": 2, "credits": 8, "resources": {}, "prerequisites": [], "successPermille": 800, "foodBonus": 1 },
+    "metallurgy": { "scientists": 1, "turns": 2, "credits": 10, "resources": {"metal":2}, "prerequisites": [], "successPermille": 800 },
+    "navigation": { "scientists": 1, "turns": 2, "credits": 10, "resources": {"crystal":2}, "prerequisites": [], "successPermille": 800 },
+    "ballistics": { "scientists": 2, "turns": 2, "credits": 12, "resources": {"metal":3}, "prerequisites": ["metallurgy"], "successPermille": 750 },
+    "flight": { "scientists": 2, "turns": 3, "credits": 18, "resources": {"fuel":4,"crystal":3}, "prerequisites": ["metallurgy"], "successPermille": 700 },
+    "sensors": { "scientists": 1, "turns": 2, "credits": 12, "resources": {"crystal":4}, "prerequisites": [], "successPermille": 800, "detectionBonus": 1 },
+    "satellites": { "scientists": 3, "turns": 3, "credits": 25, "resources": {"fuel":5,"crystal":6}, "prerequisites": ["flight","sensors"], "successPermille": 650 }
+  },
+  "unitTypes": {
+    "infantry": { "domain":"land", "movement":2, "range":1, "detection":2, "attack":10, "defense":8, "health":100, "citizens":4, "credits":4, "resources":{}, "facility":"ground_military", "prerequisites":[], "targets":["land"], "capacity":0 },
+    "armor": { "domain":"land", "movement":3, "range":1, "detection":2, "attack":18, "defense":16, "health":100, "citizens":3, "credits":14, "resources":{"metal":6,"fuel":3}, "facility":"ground_military", "prerequisites":["metallurgy"], "targets":["land"], "capacity":0 },
+    "artillery": { "domain":"land", "movement":1, "range":3, "detection":2, "attack":20, "defense":5, "health":100, "citizens":3, "credits":12, "resources":{"metal":5}, "facility":"ground_military", "prerequisites":["ballistics"], "targets":["land","sea"], "capacity":0 },
+    "fighter": { "domain":"air", "movement":6, "range":4, "detection":3, "attack":18, "defense":12, "health":100, "citizens":2, "credits":18, "resources":{"metal":4,"fuel":5}, "facility":"aircraft", "prerequisites":["flight"], "targets":["air","land"], "capacity":0 },
+    "bomber": { "domain":"air", "movement":5, "range":4, "detection":2, "attack":24, "defense":6, "health":100, "citizens":3, "credits":20, "resources":{"metal":5,"fuel":6}, "facility":"aircraft", "prerequisites":["flight"], "targets":["land","sea"], "capacity":0 },
+    "transport": { "domain":"sea", "movement":4, "range":1, "detection":2, "attack":3, "defense":6, "health":100, "citizens":3, "credits":12, "resources":{"metal":4,"fuel":2}, "facility":"naval_shipyard", "prerequisites":["navigation"], "targets":["sea"], "capacity":12 },
+    "surface_naval": { "domain":"sea", "movement":4, "range":2, "detection":3, "attack":20, "defense":18, "health":100, "citizens":4, "credits":22, "resources":{"metal":8,"fuel":4}, "facility":"naval_shipyard", "prerequisites":["navigation"], "targets":["sea","air","land"], "capacity":0 },
+    "submarine": { "domain":"sea", "movement":3, "range":2, "detection":2, "attack":24, "defense":8, "health":100, "citizens":3, "credits":20, "resources":{"metal":6,"fuel":3,"crystal":2}, "facility":"naval_shipyard", "prerequisites":["navigation","sensors"], "targets":["sea"], "capacity":0 },
+    "carrier": { "domain":"sea", "movement":3, "range":2, "detection":3, "attack":10, "defense":20, "health":100, "citizens":6, "credits":35, "resources":{"metal":12,"fuel":6,"crystal":3}, "facility":"carrier_complex", "prerequisites":["navigation","flight"], "targets":["sea","air"], "capacity":6 }
+  }
+}

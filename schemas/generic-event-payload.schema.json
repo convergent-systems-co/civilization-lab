@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/generic-event-payload.schema.json",
+  "title": "CivilizationLab Generic Event Payload",
+  "type": "object",
+  "additionalProperties": true
+}

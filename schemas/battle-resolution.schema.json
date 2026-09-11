@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/battle-resolution.schema.json",
+  "title": "CivilizationLab Deterministic Battle Resolution",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "battle_id", "run_id", "turn_committed_ref", "pre_resolution_state_ref", "participating_force_refs", "terrain_ref", "supply_ref", "defensive_state_ref", "declared_action_refs", "modifier_refs", "rng_draw_refs", "resolution_function_version", "outcome_ref", "canonical_event_refs"],
+  "properties": {
+    "schema_version": {"type": "string"}, "battle_id": {"type": "string"}, "run_id": {"type": "string"}, "turn_committed_ref": {"type": "string"}, "pre_resolution_state_ref": {"type": "string"}, "participating_force_refs": {"type": "array", "items": {"type": "string"}}, "terrain_ref": {"type": "string"}, "supply_ref": {"type": "string"}, "defensive_state_ref": {"type": "string"}, "declared_action_refs": {"type": "array", "items": {"type": "string"}}, "modifier_refs": {"type": "array", "items": {"type": "string"}}, "rng_draw_refs": {"type": "array", "items": {"type": "string"}}, "resolution_function_version": {"type": "string"}, "outcome_ref": {"type": "string"}, "canonical_event_refs": {"type": "array", "items": {"type": "string"}}
+  }
+}

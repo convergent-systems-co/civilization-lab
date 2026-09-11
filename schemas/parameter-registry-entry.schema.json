@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/parameter-registry-entry.schema.json",
+  "title": "CivilizationLab Research Parameter Registry Entry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "parameter_id", "value", "unit", "version", "classification", "status", "rationale", "allowed_calibration_stage", "freeze_stage", "sensitivity_requirements", "numeric_policy_ref", "provenance"],
+  "properties": {
+    "schema_version": {"type": "string"}, "parameter_id": {"type": "string"}, "value": {}, "unit": {"type": "string"}, "version": {"type": "string"},
+    "classification": {"enum": ["ENGINEERING", "WORLD_CALIBRATION", "TREATMENT", "CONFIRMATORY_ANALYSIS", "SECURITY/PRIVACY", "PRESENTATION"]}, "status": {"enum": ["PROVISIONAL", "FROZEN_CONFIRMATORY", "PILOT_ONLY"]}, "rationale": {"type": "string"}, "allowed_calibration_stage": {"type": "string"}, "freeze_stage": {"type": "string"}, "sensitivity_requirements": {"type": "string"}, "numeric_policy_ref": {"type": "string"}, "provenance": {"type": "string"}
+  }
+}

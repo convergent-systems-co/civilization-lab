@@ -1,0 +1,1217 @@
+{
+  "schema_version": "1.0.0",
+  "registry_version": "pilot-0.3-world-endpoint",
+  "numeric_policy": {
+    "representation": "fixed_point_integer_where_research_relevant",
+    "scale_policy": "declared_per_parameter",
+    "rounding": "round_half_even",
+    "overflow": "fail_closed",
+    "underflow": "round_to_zero_and_record",
+    "comparison": "exact_integer"
+  },
+  "unknown_parameter_policy": "confirmatory_validation_fails_closed",
+  "parameters": [
+    {
+      "schema_version":"1.0.0",
+      "parameter_id":"world.phase.budgets",
+      "value":{"observation":360000,"private_planning":360000,"diplomacy":360000,"final_planning":360000,"validation":360000,"accepted_commit":360000,"resolution":360000,"consequence_reveal":360000,"memory_update":360000,"memory_archive":360000,"snapshot":360000,"interview":360000,"close":360000},
+      "unit":"milliseconds-by-phase",
+      "version":"pilot0-turn-phases-v1",
+      "classification":"WORLD_CALIBRATION",
+      "status":"PROVISIONAL",
+      "rationale":"Explicit phase opportunities derive from the configured shared budget unless an explicit versioned override is recorded in the canonical phase command and effective registry entry.",
+      "allowed_calibration_stage":"PILOT_0",
+      "freeze_stage":"before_confirmatory_execution",
+      "sensitivity_requirements":"PILOT_0_CALIBRATION_REQUIRED: treatment-neutral timing and opportunity adequacy; no outcome-directed optimization",
+      "numeric_policy_ref":"registry.numeric_policy",
+      "provenance":"Human provisional timing authorization; config.phases.actionBudgetMs plus canonical phase command overrides"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.executionMode",
+      "value": "synthetic",
+      "unit": "evidence-classification",
+      "version": "pilot-0.3",
+      "classification": "CONFIRMATORY_ANALYSIS",
+      "status": "PILOT_ONLY",
+      "rationale": "Canonical genesis distinguishes synthetic conformance from separately authorized exploratory empirical collection; changing a label does not authorize execution or promote synthetic model output.",
+      "allowed_calibration_stage": "never inferred or calibrated from outcomes",
+      "freeze_stage": "run creation; immutable thereafter",
+      "sensitivity_requirements": "Synthetic data must never enter empirical evidence through relabeling",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Existing human build/non-empirical boundary and synthetic-versus-empirical runtime contract; registered to connect world genesis to archive analysis"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "pilot_0.max_turns",
+      "value": 20,
+      "unit": "turns",
+      "version": "pilot-0.1",
+      "classification": "CONFIRMATORY_ANALYSIS",
+      "status": "PILOT_ONLY",
+      "rationale": "Fixed Pilot 0 measurement boundary; exploratory only.",
+      "allowed_calibration_stage": "none",
+      "freeze_stage": "pilot_0_manifest",
+      "sensitivity_requirements": "report attrition and opportunity adequacy",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "human-ratified #12"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.economy.resource_production",
+      "value": {
+        "farmer_food_per_turn": 3,
+        "starting_food": 144
+      },
+      "unit": "ruleset-defined",
+      "version": "pilot-0.1",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Neutral executable default; not selected using treatment outcomes.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "pilot sensitivity and calibration report",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "WORLD.spec.md; ASTRA provisional default"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.population.unit_conversion",
+      "value": {
+        "population_per_unit": 4,
+        "recruitment_credit_cost": 4
+      },
+      "unit": "population/credits",
+      "version": "pilot-0.1",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Neutral default preserving distinct concepts.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "transition and dynamic-range checks",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "human-ratified #60; ASTRA provisional default"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.combat.coefficients",
+      "value": {
+        "attack": 10,
+        "defense": 8,
+        "terrain_modifier": 1,
+        "draw_threshold": 0.5
+      },
+      "unit": "ruleset-defined",
+      "version": "pilot-0.1",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Neutral deterministic battle default.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "battle replay and calibration report",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "human-ratified #61; ASTRA provisional default"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.termination.objective_predicates",
+      "value": [],
+      "unit": "predicate-set",
+      "version": "pilot-0.1",
+      "classification": "CONFIRMATORY_ANALYSIS",
+      "status": "PILOT_ONLY",
+      "rationale": "Pilot 0 uses fixed cap and only absorbing states.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "treatment-neutrality validation",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "human-ratified #12"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.map.geometry",
+      "value": {
+        "width": 13,
+        "height": 11,
+        "contact_radius": 2
+      },
+      "unit": "cells",
+      "version": "pilot-0.1",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Neutral executable map default.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "contact opportunity report",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "ASTRA provisional default"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.economy.consumption",
+      "value": 1,
+      "unit": "food/citizen/turn",
+      "version": "pilot-0.1",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Executable neutral default.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "attrition report",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "ASTRA provisional default"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.economy.starting_credits",
+      "value": 80,
+      "unit": "credits",
+      "version": "pilot-0.1",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Executable neutral default.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "action opportunity report",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "ASTRA provisional default"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.memory.capacity",
+      "value": 240,
+      "unit": "bytes",
+      "version": "pilot-0.1",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Bounded executable memory default.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "memory treatment fidelity report",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "ASTRA provisional default"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.phase.action_budget",
+      "value": 360000,
+      "unit": "milliseconds",
+      "version": "pilot-0.1",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Time available for inference changes action opportunities; not merely an engineering timeout.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: timeout/attrition parity and computational feasibility; no effect-directed selection",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human authorizes provisional phase timing; corrected classification against runtime opportunity contract"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "model.hf.artifact",
+      "value": {
+        "repository": "Qwen/Qwen3.5-9B-Base",
+        "revision": "68c46c4b3498877f3ef123c856ecfde50c39f404",
+        "quantization": "none",
+        "runtime": "mlx-lm",
+        "dtype": "checkpoint",
+        "device": "metal"
+      },
+      "unit": "artifact-and-runtime",
+      "version": "pilot-0.2-hf",
+      "classification": "TREATMENT",
+      "status": "PROVISIONAL",
+      "rationale": "Model/runtime is invariant across Pilot 0 arms, not an experimental history-access difference; selected existing HF cache only.",
+      "allowed_calibration_stage": "no_silent_changes",
+      "freeze_stage": "before_empirical_pilot_0_then_confirmatory_freeze",
+      "sensitivity_requirements": "artifact identity and treatment parity validation",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human HF-only correction and provisional-parameter authorization; config/pilot0-model.json"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "model.generation",
+      "value": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "max_tokens": 512,
+        "seed": 0
+      },
+      "unit": "inference-configuration",
+      "version": "pilot-0.2-hf",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Provisional shared sampling configuration, not selected using treatment outcomes.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_empirical_pilot_0_then_confirmatory_freeze",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled functionality/computational feasibility only; never treatment-effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human HF-only correction and provisional-parameter authorization; config/pilot0-model.json"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "model.context_budget",
+      "value": 262144,
+      "unit": "tokens-conservative-utf8-bound",
+      "version": "pilot-0.2-hf",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit conservative UTF8-byte bound within the pinned artifact's 262144 position capacity. Raised after synthetic full-map/action-contract sizing exposed ordinary exploration overflow; no empirical treatment behavior used, identical across arms, no truncation.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_empirical_pilot_0_then_confirmatory_freeze",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled functionality/computational feasibility only; never treatment-effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human HF-only correction and provisional-parameter authorization; config/pilot0-model.json"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "model.retry",
+      "value": {
+        "max_attempts": 3,
+        "attempt_timeout_ms": 120000
+      },
+      "unit": "attempts-and-milliseconds",
+      "version": "pilot-0.2-hf",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Retry opportunity and computation budget must remain matched; provisional synthetic-execution values require feasibility calibration.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_empirical_pilot_0_then_confirmatory_freeze",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled functionality/computational feasibility only; never treatment-effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human HF-only correction and provisional-parameter authorization; config/pilot0-model.json"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.version",
+      "value": "pilot-0.1-world-apparatus-v1-provisional",
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "ENGINEERING",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned version apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "none",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "contract conformance",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.maxTurns",
+      "value": 20,
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "CONFIRMATORY_ANALYSIS",
+      "status": "PILOT_ONLY",
+      "rationale": "Explicit versioned maxTurns apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "none",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "contract conformance",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.map",
+      "value": {
+        "width": 13,
+        "height": 11,
+        "contactRadius": 2
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned map apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled playability/dynamic-range/computational feasibility; never arm-specific effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.economy",
+      "value": {
+        "startingFood": 144,
+        "foodPerCitizen": 1,
+        "foodProductionPerFarmer": 3,
+        "startingCredits": 80
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned economy apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled playability/dynamic-range/computational feasibility; never arm-specific effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.population",
+      "value": {
+        "starting": 24,
+        "recruitmentCost": 4,
+        "unitSize": 4,
+        "casualtyRatio": 1
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned population apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled playability/dynamic-range/computational feasibility; never arm-specific effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.combat",
+      "value": {
+        "attack": 10,
+        "defense": 8,
+        "terrainModifier": 1,
+        "drawThreshold": 0.5
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned combat apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled playability/dynamic-range/computational feasibility; never arm-specific effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.memory",
+      "value": {
+        "capacity": 240,
+        "retrieval": "recency_then_priority"
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned memory apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled playability/dynamic-range/computational feasibility; never arm-specific effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.phases",
+      "value": {
+        "actionBudgetMs": 360000,
+        "actionLimit": 64
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned phases apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled playability/dynamic-range/computational feasibility; never arm-specific effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.organizations",
+      "value": {
+        "enabled": false
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "CONFIRMATORY_ANALYSIS",
+      "status": "PILOT_ONLY",
+      "rationale": "Explicit versioned organizations apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "none",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "contract conformance",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.supply",
+      "value": {
+        "enabled": false,
+        "state": "supply_disabled_state"
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "CONFIRMATORY_ANALYSIS",
+      "status": "PILOT_ONLY",
+      "rationale": "Explicit versioned supply apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "none",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "contract conformance",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.worldCalibration",
+      "value": {
+        "status": "PROVISIONAL_NONEMPIRICAL_DEFAULTS",
+        "classification": "WORLD_CALIBRATION",
+        "version": "world-apparatus-v1",
+        "provenance": "User-authorized provisional balance defaults for BUILD and NONEMPIRICAL conformance; no empirical calibration performed",
+        "freezeStage": "before_confirmation",
+        "sensitivityRequired": true
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "ENGINEERING",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned worldCalibration apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "none",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "contract conformance",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.geography",
+      "value": {
+        "landmass": "pangea",
+        "neutralLand": true,
+        "neutralTerritoryStride": 3,
+        "starts": [
+          [
+            2,
+            2
+          ],
+          [
+            10,
+            2
+          ],
+          [
+            2,
+            8
+          ]
+        ],
+        "startRadius": 1,
+        "contactTurns": 5,
+        "waterPermille": 150,
+        "forestPermille": 300,
+        "mountainPermille": 120,
+        "depositPermille": 350,
+        "depositMinimum": 20,
+        "depositVariation": 80,
+        "landmassModes": [
+          "pangea",
+          "archipelago"
+        ],
+        "terrain": {
+          "plains": {
+            "movement": 1,
+            "defensePermille": 1000,
+            "detectionPenalty": 0,
+            "fertility": 1
+          },
+          "forest": {
+            "movement": 2,
+            "defensePermille": 1300,
+            "detectionPenalty": 1,
+            "fertility": 1
+          },
+          "mountain": {
+            "movement": 3,
+            "defensePermille": 1700,
+            "detectionPenalty": 1,
+            "fertility": 0
+          },
+          "water": {
+            "movement": 1,
+            "defensePermille": 1000,
+            "detectionPenalty": 0,
+            "fertility": 0
+          }
+        }
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned geography apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled playability/dynamic-range/computational feasibility; never arm-specific effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.assignments",
+      "value": {
+        "Civilian": {
+          "starting": 4,
+          "cost": 0,
+          "turns": 1,
+          "facility": "training",
+          "prerequisites": []
+        },
+        "Farmer": {
+          "starting": 8,
+          "cost": 2,
+          "turns": 1,
+          "facility": "agriculture",
+          "prerequisites": []
+        },
+        "Builder": {
+          "starting": 3,
+          "cost": 3,
+          "turns": 2,
+          "facility": "industrial",
+          "prerequisites": []
+        },
+        "Scientist": {
+          "starting": 3,
+          "cost": 4,
+          "turns": 2,
+          "facility": "research",
+          "prerequisites": []
+        },
+        "Soldier": {
+          "starting": 4,
+          "cost": 3,
+          "turns": 1,
+          "facility": "training",
+          "prerequisites": []
+        },
+        "Explorer": {
+          "starting": 2,
+          "cost": 2,
+          "turns": 1,
+          "facility": "training",
+          "prerequisites": []
+        }
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned assignments apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled playability/dynamic-range/computational feasibility; never arm-specific effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.dynamics",
+      "value": {
+        "citizenMovement": 2,
+        "explorerMovement": 3,
+        "growthPermille": 250,
+        "growthFoodReserve": 2,
+        "shortageMortalityPermille": 100,
+        "shortageRecovery": 1,
+        "maximumShortage": 10,
+        "creditPerProductiveCitizen": 1,
+        "agricultureFoodBonus": 1,
+        "extractionPerCapacity": 2,
+        "constructionPerBuilder": 2,
+        "repairPerBuilder": 10,
+        "repairCreditPerBuilder": 2,
+        "upgradeCreditPerCapacity": 8,
+        "upgradeProgressPerCapacity": 4,
+        "maximumFacilityLevel": 3,
+        "capitalHoldTurns": 3,
+        "siegeDamagePerTurn": 5,
+        "numericScale": 1000,
+        "maxQuantity": 100000000,
+        "conditionMaximum": 100,
+        "trainingDistance": 0,
+        "minimumScientists": 1,
+        "researchProgress": 1,
+        "intelligenceCredits": 6,
+        "intelligenceTurns": 1,
+        "intelligenceAccuratePermille": 600,
+        "intelligenceIncompletePermille": 250,
+        "intelligenceDetectionPermille": 350,
+        "intelligenceAttributionPermille": 500,
+        "intelligenceErrorMinimumPermille": 500,
+        "intelligenceErrorSpreadPermille": 1000,
+        "reconCredits": 4,
+        "reconRadius": 3,
+        "satelliteRadius": 5,
+        "combatMinimumHitPermille": 100,
+        "combatMaximumHitPermille": 950,
+        "combatDamage": 50,
+        "retaliationPermille": 750,
+        "combinedArmsBonusPermille": 100,
+        "fortifyDefensePermille": 1300,
+        "retreatHealth": 25,
+        "messageMaxLength": 8000,
+        "nameMaxLength": 64,
+        "defaultUnit": "infantry",
+        "unrestEnabled": false
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned dynamics apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled playability/dynamic-range/computational feasibility; never arm-specific effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.startingProfiles",
+      "value": [
+        {
+          "resources": {
+            "metal": 30,
+            "fuel": 15,
+            "crystal": 0
+          },
+          "foodBonus": 0,
+          "creditBonus": 0,
+          "advantages": [
+            "metal reserves"
+          ],
+          "disadvantages": [
+            "no starting crystal source"
+          ]
+        },
+        {
+          "resources": {
+            "metal": 0,
+            "fuel": 30,
+            "crystal": 15
+          },
+          "foodBonus": 0,
+          "creditBonus": 0,
+          "advantages": [
+            "fuel reserves"
+          ],
+          "disadvantages": [
+            "no starting metal source"
+          ]
+        },
+        {
+          "resources": {
+            "metal": 15,
+            "fuel": 0,
+            "crystal": 30
+          },
+          "foodBonus": 0,
+          "creditBonus": 0,
+          "advantages": [
+            "crystal reserves"
+          ],
+          "disadvantages": [
+            "no starting fuel source"
+          ]
+        }
+      ],
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned startingProfiles apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled playability/dynamic-range/computational feasibility; never arm-specific effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.facilityTypes",
+      "value": {
+        "industrial": {
+          "hexes": 1,
+          "capacity": 4,
+          "credits": 12,
+          "resources": {
+            "metal": 4
+          },
+          "progress": 6,
+          "prerequisites": [],
+          "domain": "land"
+        },
+        "extraction": {
+          "hexes": 1,
+          "capacity": 2,
+          "credits": 10,
+          "resources": {
+            "metal": 3
+          },
+          "progress": 4,
+          "prerequisites": [],
+          "domain": "land"
+        },
+        "refining": {
+          "hexes": 1,
+          "capacity": 2,
+          "credits": 12,
+          "resources": {
+            "metal": 4
+          },
+          "progress": 6,
+          "prerequisites": [
+            "metallurgy"
+          ],
+          "domain": "land"
+        },
+        "agriculture": {
+          "hexes": 1,
+          "capacity": 8,
+          "credits": 8,
+          "resources": {},
+          "progress": 4,
+          "prerequisites": [],
+          "domain": "land"
+        },
+        "research": {
+          "hexes": 1,
+          "capacity": 3,
+          "credits": 15,
+          "resources": {
+            "crystal": 2
+          },
+          "progress": 6,
+          "prerequisites": [],
+          "domain": "land"
+        },
+        "training": {
+          "hexes": 1,
+          "capacity": 8,
+          "credits": 10,
+          "resources": {
+            "metal": 2
+          },
+          "progress": 4,
+          "prerequisites": [],
+          "domain": "land"
+        },
+        "ground_military": {
+          "hexes": 1,
+          "capacity": 4,
+          "credits": 14,
+          "resources": {
+            "metal": 5
+          },
+          "progress": 6,
+          "prerequisites": [],
+          "domain": "land"
+        },
+        "aircraft": {
+          "hexes": 2,
+          "capacity": 3,
+          "credits": 25,
+          "resources": {
+            "metal": 8,
+            "fuel": 4
+          },
+          "progress": 10,
+          "prerequisites": [
+            "flight"
+          ],
+          "domain": "land"
+        },
+        "naval_shipyard": {
+          "hexes": 2,
+          "capacity": 3,
+          "credits": 24,
+          "resources": {
+            "metal": 8
+          },
+          "progress": 10,
+          "prerequisites": [
+            "navigation"
+          ],
+          "domain": "coast"
+        },
+        "carrier_complex": {
+          "hexes": 3,
+          "capacity": 2,
+          "credits": 40,
+          "resources": {
+            "metal": 12,
+            "crystal": 4
+          },
+          "progress": 14,
+          "prerequisites": [
+            "flight",
+            "navigation"
+          ],
+          "domain": "coast"
+        }
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned facilityTypes apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled playability/dynamic-range/computational feasibility; never arm-specific effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.initialFacilityTypes",
+      "value": [
+        "agriculture",
+        "training",
+        "industrial",
+        "research",
+        "ground_military"
+      ],
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned initialFacilityTypes apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled playability/dynamic-range/computational feasibility; never arm-specific effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.technologies",
+      "value": {
+        "agronomy": {
+          "scientists": 1,
+          "turns": 2,
+          "credits": 8,
+          "resources": {},
+          "prerequisites": [],
+          "successPermille": 800,
+          "foodBonus": 1
+        },
+        "metallurgy": {
+          "scientists": 1,
+          "turns": 2,
+          "credits": 10,
+          "resources": {
+            "metal": 2
+          },
+          "prerequisites": [],
+          "successPermille": 800
+        },
+        "navigation": {
+          "scientists": 1,
+          "turns": 2,
+          "credits": 10,
+          "resources": {
+            "crystal": 2
+          },
+          "prerequisites": [],
+          "successPermille": 800
+        },
+        "ballistics": {
+          "scientists": 2,
+          "turns": 2,
+          "credits": 12,
+          "resources": {
+            "metal": 3
+          },
+          "prerequisites": [
+            "metallurgy"
+          ],
+          "successPermille": 750
+        },
+        "flight": {
+          "scientists": 2,
+          "turns": 3,
+          "credits": 18,
+          "resources": {
+            "fuel": 4,
+            "crystal": 3
+          },
+          "prerequisites": [
+            "metallurgy"
+          ],
+          "successPermille": 700
+        },
+        "sensors": {
+          "scientists": 1,
+          "turns": 2,
+          "credits": 12,
+          "resources": {
+            "crystal": 4
+          },
+          "prerequisites": [],
+          "successPermille": 800,
+          "detectionBonus": 1
+        },
+        "satellites": {
+          "scientists": 3,
+          "turns": 3,
+          "credits": 25,
+          "resources": {
+            "fuel": 5,
+            "crystal": 6
+          },
+          "prerequisites": [
+            "flight",
+            "sensors"
+          ],
+          "successPermille": 650
+        }
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned technologies apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled playability/dynamic-range/computational feasibility; never arm-specific effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "parameter_id": "world.configuration.unitTypes",
+      "value": {
+        "infantry": {
+          "domain": "land",
+          "movement": 2,
+          "range": 1,
+          "detection": 2,
+          "attack": 10,
+          "defense": 8,
+          "health": 100,
+          "citizens": 4,
+          "credits": 4,
+          "resources": {},
+          "facility": "ground_military",
+          "prerequisites": [],
+          "targets": [
+            "land"
+          ],
+          "capacity": 0
+        },
+        "armor": {
+          "domain": "land",
+          "movement": 3,
+          "range": 1,
+          "detection": 2,
+          "attack": 18,
+          "defense": 16,
+          "health": 100,
+          "citizens": 3,
+          "credits": 14,
+          "resources": {
+            "metal": 6,
+            "fuel": 3
+          },
+          "facility": "ground_military",
+          "prerequisites": [
+            "metallurgy"
+          ],
+          "targets": [
+            "land"
+          ],
+          "capacity": 0
+        },
+        "artillery": {
+          "domain": "land",
+          "movement": 1,
+          "range": 3,
+          "detection": 2,
+          "attack": 20,
+          "defense": 5,
+          "health": 100,
+          "citizens": 3,
+          "credits": 12,
+          "resources": {
+            "metal": 5
+          },
+          "facility": "ground_military",
+          "prerequisites": [
+            "ballistics"
+          ],
+          "targets": [
+            "land",
+            "sea"
+          ],
+          "capacity": 0
+        },
+        "fighter": {
+          "domain": "air",
+          "movement": 6,
+          "range": 4,
+          "detection": 3,
+          "attack": 18,
+          "defense": 12,
+          "health": 100,
+          "citizens": 2,
+          "credits": 18,
+          "resources": {
+            "metal": 4,
+            "fuel": 5
+          },
+          "facility": "aircraft",
+          "prerequisites": [
+            "flight"
+          ],
+          "targets": [
+            "air",
+            "land"
+          ],
+          "capacity": 0
+        },
+        "bomber": {
+          "domain": "air",
+          "movement": 5,
+          "range": 4,
+          "detection": 2,
+          "attack": 24,
+          "defense": 6,
+          "health": 100,
+          "citizens": 3,
+          "credits": 20,
+          "resources": {
+            "metal": 5,
+            "fuel": 6
+          },
+          "facility": "aircraft",
+          "prerequisites": [
+            "flight"
+          ],
+          "targets": [
+            "land",
+            "sea"
+          ],
+          "capacity": 0
+        },
+        "transport": {
+          "domain": "sea",
+          "movement": 4,
+          "range": 1,
+          "detection": 2,
+          "attack": 3,
+          "defense": 6,
+          "health": 100,
+          "citizens": 3,
+          "credits": 12,
+          "resources": {
+            "metal": 4,
+            "fuel": 2
+          },
+          "facility": "naval_shipyard",
+          "prerequisites": [
+            "navigation"
+          ],
+          "targets": [
+            "sea"
+          ],
+          "capacity": 12
+        },
+        "surface_naval": {
+          "domain": "sea",
+          "movement": 4,
+          "range": 2,
+          "detection": 3,
+          "attack": 20,
+          "defense": 18,
+          "health": 100,
+          "citizens": 4,
+          "credits": 22,
+          "resources": {
+            "metal": 8,
+            "fuel": 4
+          },
+          "facility": "naval_shipyard",
+          "prerequisites": [
+            "navigation"
+          ],
+          "targets": [
+            "sea",
+            "air",
+            "land"
+          ],
+          "capacity": 0
+        },
+        "submarine": {
+          "domain": "sea",
+          "movement": 3,
+          "range": 2,
+          "detection": 2,
+          "attack": 24,
+          "defense": 8,
+          "health": 100,
+          "citizens": 3,
+          "credits": 20,
+          "resources": {
+            "metal": 6,
+            "fuel": 3,
+            "crystal": 2
+          },
+          "facility": "naval_shipyard",
+          "prerequisites": [
+            "navigation",
+            "sensors"
+          ],
+          "targets": [
+            "sea"
+          ],
+          "capacity": 0
+        },
+        "carrier": {
+          "domain": "sea",
+          "movement": 3,
+          "range": 2,
+          "detection": 3,
+          "attack": 10,
+          "defense": 20,
+          "health": 100,
+          "citizens": 6,
+          "credits": 35,
+          "resources": {
+            "metal": 12,
+            "fuel": 6,
+            "crystal": 3
+          },
+          "facility": "carrier_complex",
+          "prerequisites": [
+            "navigation",
+            "flight"
+          ],
+          "targets": [
+            "sea",
+            "air"
+          ],
+          "capacity": 6
+        }
+      },
+      "unit": "configuration-section",
+      "version": "pilot-0.1-world-apparatus-v1-provisional",
+      "classification": "WORLD_CALIBRATION",
+      "status": "PROVISIONAL",
+      "rationale": "Explicit versioned unitTypes apparatus configuration; no hidden parameter values or treatment-effect selection.",
+      "allowed_calibration_stage": "PILOT_0",
+      "freeze_stage": "before_confirmatory_execution",
+      "sensitivity_requirements": "PILOT_0_CALIBRATION_REQUIRED: pooled playability/dynamic-range/computational feasibility; never arm-specific effect optimization",
+      "numeric_policy_ref": "registry.numeric_policy",
+      "provenance": "Human-authorized provisional build defaults; config/pilot0-world.json; no empirical calibration performed"
+    }
+  ]
+}

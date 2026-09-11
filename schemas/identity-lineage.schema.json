@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/identity-lineage.schema.json",
+  "title": "CivilizationLab Identity and Lineage Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["study_id", "condition_id", "run_id", "experimental_identity_id", "persistent_identity_id", "session_id", "invocation_id", "lineage", "event_ref"],
+  "properties": {
+    "study_id": {"type": "string"},
+    "condition_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "experimental_identity_id": {"type": "string"},
+    "persistent_identity_id": {"type": "string"},
+    "session_id": {"type": "string"},
+    "invocation_id": {"type": "string"},
+    "retry_id": {"type": ["string", "null"]},
+    "lineage": {"type": "object", "required": ["parent_run_id", "branch_point", "recovery_of", "fork_of"], "additionalProperties": false, "properties": {"parent_run_id": {"type": ["string", "null"]}, "branch_point": {"type": ["object", "null"]}, "recovery_of": {"type": ["string", "null"]}, "fork_of": {"type": ["string", "null"]}}},
+    "event_ref": {"type": "string"}
+  }
+}

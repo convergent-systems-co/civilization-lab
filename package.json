@@ -1,0 +1,19 @@
+{
+  "name": "civilization-lab",
+  "version": "0.1.0-pilot0",
+  "private": true,
+  "description": "Specification-first CivilizationLab Pilot 0 apparatus",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "validate": "node scripts/validate-contracts.js",
+    "test": "node --test --test-concurrency=4",
+    "check": "npm run validate && npm test && npm run build"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}

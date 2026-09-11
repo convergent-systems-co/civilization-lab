@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/territory-state.schema.json",
+  "title": "CivilizationLab Territory State",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "territory_id", "status", "owner_id", "controller_id", "exclusive_claimant_id", "claim_refs", "transition_event_refs", "contested_reason", "resolution_policy_ref"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "territory_id": {"type": "string"},
+    "status": {"enum": ["unclaimed", "controlled", "contested"]},
+    "owner_id": {"type": ["string", "null"]},
+    "controller_id": {"type": ["string", "null"]},
+    "exclusive_claimant_id": {"type": ["string", "null"]},
+    "claim_refs": {"type": "array", "items": {"type": "string"}},
+    "transition_event_refs": {"type": "array", "items": {"type": "string"}},
+    "contested_reason": {"type": ["string", "null"]},
+    "resolution_policy_ref": {"type": "string"},
+    "transition": {"type": "string"},
+    "contested_since_turn": {"type": ["integer", "null"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "contested"}}},
+      "then": {"required": ["contested_since_turn"], "properties": {"owner_id": {"type": "null"}, "exclusive_claimant_id": {"type": "null"}, "claim_refs": {"minItems": 2}, "contested_reason": {"type": "string"}}}
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["unclaimed", "controlled"]}}},
+      "then": {"properties": {"contested_since_turn": {"type": "null"}, "contested_reason": {"type": "null"}}}
+    }
+  ]
+}

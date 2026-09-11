@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/run-disposition.schema.json",
+  "title": "CivilizationLab Run Disposition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "execution_status", "evidence_validity", "experimental_validity", "endpoint_eligibility", "security_eligibility", "exploratory_only", "replacement_policy", "evidence_completeness"],
+  "properties": {
+    "schema_version": {"type": "string"}, "run_id": {"type": "string"},
+    "execution_status": {"enum": ["complete", "interrupted", "invalid", "contaminated", "incomplete"]}, "evidence_validity": {"type": "object", "required": ["canonical_record_accurate"]}, "experimental_validity": {"type": "object", "required": ["confirmatory_eligible"]},
+    "endpoint_eligibility": {"type": "object", "required": ["primary_confirmatory"]}, "security_eligibility": {"type": "object", "required": ["security_analysis_eligible"]},
+    "exploratory_only": {"type": "boolean"}, "replacement_policy": {"type": "object"},
+    "evidence_completeness": {"type": "object", "required": ["status"]}
+  },
+  "allOf": [{"if": {"properties": {"execution_status": {"enum": ["invalid", "contaminated", "incomplete"]}}}, "then": {"properties": {"experimental_validity": {"properties": {"confirmatory_eligible": {"const": false}}}}}}]
+}

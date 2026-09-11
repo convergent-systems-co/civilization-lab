@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/metric-definition.schema.json",
+  "title": "CivilizationLab Metric Definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "metric_id", "metric_version", "construct_class", "evidence_level", "experimental_unit", "grain", "source_events", "eligibility", "denominator", "temporal_window", "aggregation", "nesting", "interference_assumptions", "missingness", "source_acl_policy", "acl_policy", "minimum_disclosure", "claim_class", "derivation"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "metric_id": {"type": "string"},
+    "metric_version": {"type": "string"},
+    "construct_class": {"enum": ["relational_behavior", "civilization", "interaction", "security", "coded_interpretation", "theoretical"]},
+    "evidence_level": {"enum": ["level_1_deterministic", "level_2_coded", "level_3_theoretical"]},
+    "experimental_unit": {"enum": ["run", "polity", "agent"]},
+    "grain": {"enum": ["run", "turn", "polity", "agent", "interaction", "eligible_commitment"]},
+    "source_events": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "eligibility": {"type": "object"},
+    "denominator": {"type": "object"},
+    "temporal_window": {"type": "object"},
+    "aggregation": {"type": "object"},
+    "nesting": {"type": "object"},
+    "interference_assumptions": {"type": "object"},
+    "missingness": {"type": "object"},
+    "source_acl_policy": {"type": "object"},
+    "acl_policy": {"type": "object"},
+    "minimum_disclosure": {"type": "object", "required": ["minimum_run_count", "small_cell_policy", "differencing_policy"]},
+    "claim_class": {"enum": ["primary_confirmatory", "secondary_confirmatory", "exploratory", "descriptive"]},
+    "derivation": {"type": "object", "required": ["code_hash", "input_manifest_hash", "formula"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"claim_class": {"const": "primary_confirmatory"}}},
+      "then": {
+        "properties": {
+          "construct_class": {"const": "relational_behavior"},
+          "grain": {"const": "run"},
+          "evidence_level": {"enum": ["level_1_deterministic", "level_2_coded"]}
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/turn-committed.schema.json",
+  "title": "CivilizationLab TurnCommitted Boundary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "turn_committed_id", "run_id", "turn_id", "turn", "input_state_hash", "accepted_submission_ids", "accepted_action_ids", "actor_action_refs", "projection_version_refs", "configuration_hash", "rng_provenance_root_ref", "rng_provenance_refs", "lineage_refs", "action_set_hash", "commit_event_id", "catalogue_version", "immutable_after_commit"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "turn_committed_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "turn_id": {"type": "string"},
+    "turn": {"type": "integer", "minimum": 0},
+    "input_state_hash": {"type": "string"},
+    "accepted_submission_ids": {"type": "array", "items": {"type": "string"}},
+    "accepted_action_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "actor_action_refs": {"type": "array", "items": {"type": "string"}},
+    "projection_version_refs": {"type": "array", "items": {"type": "string"}},
+    "configuration_hash": {"type": "string"},
+    "rng_provenance_refs": {"type": "array", "items": {"type": "string"}},
+    "rng_provenance_root_ref": {"type": "string"},
+    "lineage_refs": {"type": "array", "items": {"type": "string"}},
+    "action_set_hash": {"type": "string"},
+    "commit_event_id": {"type": "string"},
+    "catalogue_version": {"type": "string"},
+    "immutable_after_commit": {"const": true}
+  }
+}

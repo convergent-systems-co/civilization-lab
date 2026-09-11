@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/population-unit-transition.schema.json",
+  "title": "CivilizationLab Population and Unit Transition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "transition_id", "run_id", "turn", "transition", "population_before_ref", "population_after_ref", "unit_before_refs", "unit_after_refs", "resource_input_refs", "canonical_event_ref"],
+  "properties": {
+    "schema_version": {"type": "string"}, "transition_id": {"type": "string"}, "run_id": {"type": "string"}, "turn": {"type": "integer", "minimum": 0}, "transition": {"enum": ["recruitment", "loss", "destruction", "death", "demobilization", "return_to_population", "consumption", "growth", "estate_disposition", "incorporation", "reactivation"]}, "population_before_ref": {"type": "string"}, "population_after_ref": {"type": "string"}, "unit_before_refs": {"type": "array", "items": {"type": "string"}}, "unit_after_refs": {"type": "array", "items": {"type": "string"}}, "resource_input_refs": {"type": "array", "items": {"type": "string"}}, "canonical_event_ref": {"type": "string"}
+  }
+}

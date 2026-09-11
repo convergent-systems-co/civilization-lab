@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/organization-contract.schema.json",
+  "title": "CivilizationLab Organization Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "study_version", "enabled", "disabled_surface_policy", "identity", "lifecycle", "membership", "governance", "ownership_control", "permissions", "privacy", "history_memory", "communication_publication", "turns_phases", "dissolution_succession"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "study_version": {"type": "string"},
+    "enabled": {"type": "boolean"},
+    "disabled_surface_policy": {"type": "string"},
+    "identity": {"type": "object"},
+    "lifecycle": {"type": "object"},
+    "membership": {"type": "object"},
+    "governance": {"type": "object"},
+    "ownership_control": {"type": "object"},
+    "permissions": {"type": "object"},
+    "privacy": {"type": "object"},
+    "history_memory": {"type": "object"},
+    "communication_publication": {"type": "object"},
+    "turns_phases": {"type": "object"},
+    "dissolution_succession": {"type": "object"}
+  },
+  "allOf": [{"if": {"properties": {"enabled": {"const": false}}}, "then": {"properties": {"disabled_surface_policy": {"const": "all_formal_surfaces_absent"}}}}]
+}

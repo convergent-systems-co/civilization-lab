@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/model-invocation.schema.json",
+  "title": "CivilizationLab Model Invocation Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "invocation_id", "session_id", "run_id", "condition_id", "context_segments", "rendered_input_ref", "rendered_output_ref", "model_runtime_hash", "parser_hash", "projection_ref", "memory_refs", "tool_result_refs", "action_ref", "attempt", "retry_of"],
+  "properties": {
+    "schema_version": {"type": "string"}, "invocation_id": {"type": "string"}, "session_id": {"type": "string"}, "run_id": {"type": "string"}, "condition_id": {"type": "string"},
+    "context_segments": {"type": "array", "items": {"$ref": "context-segment.schema.json"}}, "rendered_input_ref": {"type": "string"}, "rendered_output_ref": {"type": "string"},
+    "model_runtime_hash": {"type": "string"}, "parser_hash": {"type": "string"}, "projection_ref": {"type": "string"}, "memory_refs": {"type": "array", "items": {"type": "string"}}, "tool_result_refs": {"type": "array", "items": {"type": "string"}}, "action_ref": {"type": ["string", "null"]}, "attempt": {"type": "integer", "minimum": 1}, "retry_of": {"type": ["string", "null"]}
+  }
+}

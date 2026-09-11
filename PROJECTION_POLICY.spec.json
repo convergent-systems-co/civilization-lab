@@ -1,0 +1,10 @@
+{
+  "$schema": "schemas/projection-policy.schema.json",
+  "schema_version": "1.0.0",
+  "policy_version": "pilot-0.1",
+  "participant_fields": ["own.polity_state", "public.discovered_world_state", "own.knowledge", "public.known_map", "public.known_territories", "public.rules", "own.intelligence", "authorized.messages", "authorized.channels", "own.memory", "own.available_actions", "public_safe.validation_results"],
+  "participant_denials": ["true_world_state", "undiscovered.foreign_state", "unauthorized.private_channels", "observer_truth", "security_audit", "raw_other_agent_memory", "redacted_content", "debug_authority_data"],
+  "surface_inheritance": ["prompt", "memory", "api", "ui", "accessibility", "map", "search", "autocomplete", "notifications", "cache", "replay", "debug"],
+  "fail_closed": true,
+  "human_ai_parity": true
+}

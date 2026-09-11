@@ -1,0 +1,57 @@
+{
+  "version": "implementation-review-2026-09-10-v5",
+  "scope": "BUILD_AND_NONEMPIRICAL_CONFORMANCE_ONLY",
+  "authority": "Human Pilot 0 implementation authorization and fourteen endpoint operational definitions",
+  "release_acceptance": "FINAL_NONEMPIRICAL_APPARATUS_ACCEPTED",
+  "research_execution_authorized": false,
+  "reviews": [
+    {"domain":"statistics_endpoint","reviewer":"Bohr","status":"FIXES_TARGETED_TESTED","tests":"81 endpoint tests passed","findings":["counterparty representation duplicates","initiating sender mismatch","missing broadcast audience","physical condition confused with treatment metadata","repair evaluability without evidence"]},
+    {"domain":"simulation_world","reviewer":"Halley","status":"RATIFIED_CYCLIC_SUCCESSION_IMPLEMENTED_TARGETED_TESTS_PASS","findings":["simultaneous conquest sequencing","cyclic asset succession resolved as simultaneous no-successor estate","embark and carrier gift conflict","duplicated facility production capacity","contested owner-only permissions","stale self-ownership reveals hidden destruction"]},
+    {"domain":"acl_security","reviewer":"Planck","status":"FIXES_TARGETED_TESTED","findings":["redacted content survives escaping and context dependencies","publication race recreates purged objects","stale facility visibility"]},
+    {"domain":"evidence_provenance","reviewer":"Descartes","status":"FIXES_TARGETED_TESTED","tests":"41 new tests passed; 26 replay/security gates preserved","findings":["memory lost on runtime recovery","unvalidated action output references","inconsistent identity and temporal lineage","privacy publication race"]},
+    {"domain":"agent_treatment_fidelity","reviewer":"Franklin","status":"FIXES_INTEGRATED_FULL_SUITE_PASS","tests":"557-test integrated suite passed","findings":["participant action identifiers carry history","duplicate labels block commit","deadline shorter than artifact verification","memory edits not bound to completion","missing phase-specific memory interface","incorrect runtime phase lineage"]},
+    {"domain":"ui_accessibility","reviewer":"Franklin","status":"FIXES_INTEGRATED_FULL_SUITE_PASS","tests":"browser/HTTP adversarial checks and 557-test integrated suite passed","findings":["Observer displayed corrupt source without warning","broadcast mislabeled private","human reconnaissance target restricted to known hexes","authenticated denials lack canonical violations","standalone fallback ignores invalid disposition","replay map lacks keyboard entry","invalid disposition not prominent","confidant text shown encoded"],"independence_note":"Separate domain pass; same specialist also reviewed runtime. Do not claim eight different models or people."},
+    {"domain":"replay_reproducibility","reviewer":"Galileo","status":"NOT_COMPLETED_TOOL_ERROR","acceptance_credit":false},
+    {"domain":"replay_reproducibility","reviewer":"Plato","status":"P1_FINDINGS_FIXED_FULL_SUITE_PASS","tests":"adversarial regressions and 557-test integrated suite passed","findings":["branched worlds could not independently replay from inherited genesis","standalone fabricated interview evidence could receive exact replay acceptance","RunService facade leaked mutable nested authoritative objects","branch parent head was self-asserted rather than externally archive-bound"],"acceptance_credit":true},
+    {"domain":"research_validity","reviewer":"Parfit","status":"FIXES_TARGETED_TESTED","tests":"endpoint/research-validity tests and 557-test integrated suite passed","findings":["same-turn live reply lacks causal exposure","repair credits unrelated parties or post-evaluation acts","empirical archive-analysis classification unreachable","unregistered WorldTransition mechanisms accepted","breach disposition omitted from endpoint artifact"]},
+    {"domain":"final_cross_domain_synthesis","reviewer":"Codex adversarial synthesis","status":"PASS_NO_REMAINING_P0_P1","tests":"557 passed, 0 failed, 0 skipped","findings_closed":["rehashed evidence versus independent replay","closed conquest-cycle estates","endpoint temporal attribution","transitive clean-room archives","canonical causal references","crash/publication recovery","confidant projection isolation","participant/observer authorization separation","Hugging Face artifact lock and model lineage","human/AI action parity","canonical Base64 and redaction closure","recursive carrier causality"]}
+  ],
+  "conflicts": [
+    {
+      "id":"endpoint-original-operationalization",
+      "affected_specifications":["PRIMARY_ENDPOINT.spec.json","ENDPOINT_CODEBOOK.spec.md","STATISTICS.spec.md"],
+      "positions":["Historical six-component names lacked executable definitions","Human subsequently supplied four operational components and fourteen measurement rules"],
+      "research_consequence":"Previously arbitrary measurement functions; no longer an unanswered request to ratify component definitions",
+      "resolution":"Use human four-component endpoint v2, common scaling, explicit missingness and blinded canonical coding",
+      "disposition":"RESOLVED",
+      "authority_provenance":"Latest human endpoint operationalization message; validation/ENDPOINT_OPERATIONALIZATION.md"
+    },
+    {
+      "id":"endpoint-window-membership",
+      "affected_specifications":["PRIMARY_ENDPOINT.spec.json","ENDPOINT_CODEBOOK.spec.md"],
+      "positions":["Assign commitment and repair opportunities to initiation windows","Assign commitment and repair opportunities to evaluation/due windows"],
+      "research_consequence":"A commitment formed at turn 5 and fulfilled at turn 6 changes early-window membership; resulting longitudinal measures differ",
+      "resolution":"Commitment outcomes use due/evaluable turns; repair opportunities use rupture turns; preserve formation/rupture, attempt/evaluable and disposition turns separately",
+      "disposition":"RESOLVED_IMPLEMENTED_TARGETED_TESTS_PASS",
+      "authority_provenance":"Human ratified endpoint temporal attribution decision; PRIMARY_ENDPOINT.spec.json; ENDPOINT_CODEBOOK.spec.md; endpoint tests"
+    },
+    {
+      "id":"late-reciprocity-followup",
+      "affected_specifications":["PRIMARY_ENDPOINT.spec.json","ENDPOINT_CODEBOOK.spec.md","HORIZON_POLICY.spec.json"],
+      "positions":["Five-turn complete follow-up is required for eligible initiating actions","Pilot 0 late window ends at the 20-turn cap"],
+      "research_consequence":"Late-window initiators lack five-turn follow-up, so the late reciprocity and dependent change coordinates remain censored",
+      "resolution":"Preserve censoring and explicit null values; do not change windows, shorten follow-up or impute. Carry limitation into later authorized measurement-adequacy assessment",
+      "disposition":"RATIFIED_RULES_PRESERVED_WITH_MEASUREMENT_LIMITATION",
+      "authority_provenance":"Human sections 3, 5, 9 and 10; no new numeric choice introduced"
+    },
+    {
+      "id":"cyclic-conquest-succession",
+      "affected_specifications":["WORLD.spec.md"],
+      "positions":["All threshold-qualified eliminations are simultaneous","Conquered assets ordinarily pass to a captor, but every captor in a cycle also disappears"],
+      "research_consequence":"No specified custody/ownership destination exists; serial application would select identity-dependent survival",
+      "resolution":"Eliminate all closed-cycle members simultaneously; orphan each asset class under explicit unclaimed, unaffiliated, inactive-neutral, physical-resource-retention and abstract-balance-extinguishment rules",
+      "disposition":"RESOLVED_IMPLEMENTED_TARGETED_REPLAY_PASS",
+      "authority_provenance":"Human ratified cyclic conquest succession decision; WORLD.spec.md; IMPLEMENTATION_BLOCKERS.md; test/conquest-cycle.test.js; GitHub #7 and #10"
+    }
+  ]
+}

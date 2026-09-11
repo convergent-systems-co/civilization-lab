@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0.0",
+  "baseline_id": "pilot0-implementation-v0.1.0",
+  "git": {
+    "tag": "v0.1.0-pilot0",
+    "commit_binding": "annotated_tag_target",
+    "note": "The immutable commit SHA is the target object of the annotated tag; a commit cannot contain its own SHA without changing it."
+  },
+  "validation": {
+    "tests_total": 557,
+    "tests_passed": 557,
+    "tests_failed": 0,
+    "tests_skipped": 0,
+    "schemas_validated": 39,
+    "event_catalogue_entries": 25,
+    "build": "PASS",
+    "conformance": "PASS",
+    "adversarial_validation": "PASS",
+    "records": [
+      "validation/IMPLEMENTATION_CHECKPOINT.md",
+      "validation/SPECIALIST_CONFLICT_REGISTER.json",
+      "validation/ENDPOINT_OPERATIONALIZATION.md",
+      "validation/NATIVE_RUNTIME_SMOKE.md"
+    ]
+  },
+  "contract_versions": {
+    "package": "0.1.0-pilot0",
+    "parameter_registry": "pilot-0.3-world-endpoint",
+    "event_catalogue": "1.0.0",
+    "primary_endpoint": "2.0.0",
+    "world_configuration": "pilot-0.1-world-apparatus-v1-provisional",
+    "schema_dialect": "bounded-json-schema-draft-2020-12"
+  },
+  "specification_sha256": {
+    "INVARIANTS.spec.md": "7740ed8b0c0462fe6a07a3d4193be1313a4ac71366cea258b560df6db12ee638",
+    "WORLD.spec.md": "a7c266efd73e8c1750c282076d7ea25622e642581490f7961e52834b3637e322",
+    "STATISTICS.spec.md": "04960e850e7ec83742a90639f5bb9e21ba0e11542aecb52db45470547f919a07",
+    "EVALUATION.spec.md": "3ffd5e9940ea54106fbaae6174d5a532ad936aa8ebb1a3357fd18616cfa265e5",
+    "VALIDATION.spec.md": "0b7ae242cc57dc887bea4fc11d1bec9696b9a9c9a3733ba152e2e1c4a4c857d3",
+    "MODEL_RUNTIME.spec.md": "dfa1b65121305d367cd02225f0f01fde165009c038dfc0296d468c9d35982676",
+    "EVENT_CATALOGUE.spec.json": "cdfde3e3311dcd9c811752d72057bd343bbed9160432d155648b96fe8cd5b156",
+    "PARAMETER_REGISTRY.spec.json": "1283cc447bfa118651fb52f7954d68935ebdf64cfdf70a91965d68d958122f31",
+    "PRIMARY_ENDPOINT.spec.json": "74b63c6256fd845f96dd0751fbd80c959cc5829e2ec05995ff2a44d7129571ed",
+    "PROJECTION_POLICY.spec.json": "4476610a3255b220b828d91745ce01ae388dc6a395a67ec4229aefa6b0b5b066",
+    "HORIZON_POLICY.spec.json": "edce22c1f20b10d41c93e7a9f1c81535af61a84a28ff1bf1186e1439bd4b4dcc",
+    "BREACH_POLICY.spec.json": "7b23e53142c8b224385d0210ff5ac557ef452ccfff87dd250de352eda27c068f",
+    "ENDPOINT_CODEBOOK.spec.md": "72240109586544dcce616c9a1dc7a927d5b07456d929ab797fb34281c49c0dcf"
+  },
+  "runtime": {
+    "node": "26.8.2",
+    "npm": "11.19.1",
+    "platform": "Darwin 25.6.0 arm64",
+    "package_lock_sha256": "8468ea3bfdcc6f07caefe9ecb0d4c31f8cba912dabd86728e15885fbcc0e81b7",
+    "hugging_face_repository": "Qwen/Qwen3.5-9B-Base",
+    "hugging_face_revision": "68c46c4b3498877f3ef123c856ecfde50c39f404",
+    "model_artifact_hash": "f300d6172dd4f852e3f1e47d3d33275e0a6c62075dfd5c567ec412f839a22c59",
+    "tokenizer_hash": "09f36fad5128ba0d2cf24a8c47373c279766f7981baa23d0862caf4bacb6060b",
+    "runtime_hash": "7ec89ee0098059839540d5d72c8a1acc3779b786f88ee363fb2359a1ff382549",
+    "model_configuration_sha256": "2cdfd8b9186becd7349dc361f508dc4da4084b7d7dd76cfad906b74fb5ebfc48",
+    "world_configuration_sha256": "41f6659734ec38b74f093e13f7fcd2eaa7df78405679a8da633c471b8cfe8473"
+  },
+  "calibration_state": "WORLD_CALIBRATION_VALUES_REMAIN_PROVISIONAL",
+  "empirical_execution_authorized": false,
+  "confirmatory_execution_authorized": false
+}

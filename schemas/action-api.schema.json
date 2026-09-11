@@ -1,0 +1,3548 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/action-api.schema.json",
+  "title": "Pilot 0 typed participant action v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type"
+  ],
+  "properties": {
+    "action_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "type": {
+      "enum": [
+        "wait",
+        "name",
+        "move",
+        "move_population",
+        "explore",
+        "attack",
+        "fortify",
+        "recruit",
+        "demobilize",
+        "reassign",
+        "train",
+        "build",
+        "resume_construction",
+        "upgrade",
+        "repair",
+        "destroy",
+        "research",
+        "reverse_engineer",
+        "prospect",
+        "intelligence",
+        "reconnaissance",
+        "transfer",
+        "share_technology",
+        "claim",
+        "annex",
+        "abandon",
+        "exchange_territory",
+        "channel_create",
+        "channel_invite",
+        "channel_leave",
+        "message",
+        "promise",
+        "broadcast",
+        "embark",
+        "disembark",
+        "transfer_unit",
+        "transfer_population",
+        "transfer_facility",
+        "incorporate_population",
+        "reactivate_unit",
+        "acquire_facility"
+      ]
+    },
+    "actor_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "submission_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "invocation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "unit_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hex_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "citizen_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "unaffiliated_population_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "neutral_unit_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_unit_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "facility_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "assignment": {
+      "type": "string",
+      "minLength": 1
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000000
+    },
+    "facility_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hex_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "technology": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifact_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "to": {
+      "type": "string",
+      "minLength": 1
+    },
+    "resource": {
+      "type": "string",
+      "minLength": 1
+    },
+    "amount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000000
+    },
+    "territory_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "members": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "channel_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "text": {
+      "type": "string"
+    },
+    "carrier_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "unit_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "citizen_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "builder_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "scientist_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "wait"
+          }
+        }
+      },
+      "then": {
+        "required": [],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "name"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "move"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "unit_id",
+          "hex_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "unit_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hex_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "move_population"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "citizen_id",
+          "hex_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "citizen_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hex_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "explore"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "citizen_id",
+          "hex_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "citizen_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hex_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "attack"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "unit_id",
+          "target_unit_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "unit_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target_unit_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "fortify"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "unit_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "unit_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "recruit"
+          }
+        }
+      },
+      "then": {
+        "required": [],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "unit_type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "facility_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "citizen_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "hex_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "demobilize"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "unit_id",
+          "facility_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "unit_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "facility_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "reassign"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "citizen_id",
+          "assignment",
+          "count",
+          "facility_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "citizen_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "assignment": {
+            "type": "string",
+            "minLength": 1
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          },
+          "facility_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "train"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "citizen_id",
+          "assignment",
+          "count",
+          "facility_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "citizen_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "assignment": {
+            "type": "string",
+            "minLength": 1
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          },
+          "facility_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "build"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "facility_type",
+          "hex_ids"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "facility_type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hex_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "builder_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "resume_construction"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "facility_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "facility_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "builder_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "upgrade"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "facility_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "facility_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "builder_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "repair"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "facility_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "facility_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "builder_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "destroy"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "facility_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "facility_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "research"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "technology",
+          "facility_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "technology": {
+            "type": "string",
+            "minLength": 1
+          },
+          "facility_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scientist_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "reverse_engineer"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "technology",
+          "facility_id",
+          "artifact_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "technology": {
+            "type": "string",
+            "minLength": 1
+          },
+          "facility_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "artifact_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scientist_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "prospect"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "citizen_id",
+          "hex_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "citizen_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hex_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "intelligence"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "to"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "reconnaissance"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "hex_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hex_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "unit_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "transfer"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "to",
+          "resource",
+          "amount"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1
+          },
+          "resource": {
+            "type": "string",
+            "minLength": 1
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "share_technology"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "to",
+          "technology"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1
+          },
+          "technology": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "claim"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "territory_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "territory_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "annex"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "territory_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "territory_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "abandon"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "territory_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "territory_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "exchange_territory"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "territory_id",
+          "to"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "territory_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "channel_create"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "members"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "channel_invite"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "channel_id",
+          "to"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "channel_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "channel_leave"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "channel_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "channel_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "message"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "text": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1
+          },
+          "channel_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "promise"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "text": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1
+          },
+          "channel_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "broadcast"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "embark"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "carrier_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "carrier_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "unit_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "citizen_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "disembark"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "carrier_id",
+          "hex_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "carrier_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hex_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "unit_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "citizen_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "transfer_unit"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "to",
+          "unit_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark",
+              "transfer_unit",
+              "transfer_population",
+              "transfer_facility"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1
+          },
+          "unit_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "transfer_population"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "to",
+          "citizen_id",
+          "count"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark",
+              "transfer_unit",
+              "transfer_population",
+              "transfer_facility"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1
+          },
+          "citizen_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "transfer_facility"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "to",
+          "facility_id"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "wait",
+              "name",
+              "move",
+              "move_population",
+              "explore",
+              "attack",
+              "fortify",
+              "recruit",
+              "demobilize",
+              "reassign",
+              "train",
+              "build",
+              "resume_construction",
+              "upgrade",
+              "repair",
+              "destroy",
+              "research",
+              "reverse_engineer",
+              "prospect",
+              "intelligence",
+              "reconnaissance",
+              "transfer",
+              "share_technology",
+              "claim",
+              "annex",
+              "abandon",
+              "exchange_territory",
+              "channel_create",
+              "channel_invite",
+              "channel_leave",
+              "message",
+              "promise",
+              "broadcast",
+              "embark",
+              "disembark",
+              "transfer_unit",
+              "transfer_population",
+              "transfer_facility"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "submission_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1
+          },
+          "facility_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {"properties": {"type": {"const": "incorporate_population"}}},
+      "then": {
+        "required": ["unaffiliated_population_id", "count"],
+        "properties": {
+          "action_id": {"type": "string", "minLength": 1},
+          "type": {"const": "incorporate_population"},
+          "actor_id": {"type": "string", "minLength": 1},
+          "submission_id": {"type": "string", "minLength": 1},
+          "session_id": {"type": "string", "minLength": 1},
+          "invocation_id": {"type": "string", "minLength": 1},
+          "unaffiliated_population_id": {"type": "string", "minLength": 1},
+          "count": {"type": "integer", "minimum": 1, "maximum": 100000000}
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {"properties": {"type": {"const": "reactivate_unit"}}},
+      "then": {
+        "required": ["neutral_unit_id", "citizen_ids"],
+        "properties": {
+          "action_id": {"type": "string", "minLength": 1},
+          "type": {"const": "reactivate_unit"},
+          "actor_id": {"type": "string", "minLength": 1},
+          "submission_id": {"type": "string", "minLength": 1},
+          "session_id": {"type": "string", "minLength": 1},
+          "invocation_id": {"type": "string", "minLength": 1},
+          "neutral_unit_id": {"type": "string", "minLength": 1},
+          "citizen_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true}
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {"properties": {"type": {"const": "acquire_facility"}}},
+      "then": {
+        "required": ["facility_id"],
+        "properties": {
+          "action_id": {"type": "string", "minLength": 1},
+          "type": {"const": "acquire_facility"},
+          "actor_id": {"type": "string", "minLength": 1},
+          "submission_id": {"type": "string", "minLength": 1},
+          "session_id": {"type": "string", "minLength": 1},
+          "invocation_id": {"type": "string", "minLength": 1},
+          "facility_id": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/security-incident.schema.json",
+  "title": "CivilizationLab Security Incident",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "incident_id", "run_id", "logical_time", "detector_ref", "breach_type", "exposure_scope", "first_affected_event", "last_affected_event", "containment", "run_disposition_ref", "analytical_eligibility", "evidence_refs"],
+  "properties": {
+    "schema_version": {"type": "string"}, "incident_id": {"type": "string"}, "run_id": {"type": "string"},
+    "logical_time": {"type": "object"}, "detector_ref": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "breach_type": {"type": "string"}, "exposure_scope": {"type": "object"},
+    "first_affected_event": {"type": "string", "pattern": "^evt_[a-f0-9]{20}$"}, "last_affected_event": {"type": "string", "pattern": "^evt_[a-f0-9]{20}$"},
+    "containment": {"type": "object"}, "run_disposition_ref": {"type": "string"},
+    "analytical_eligibility": {"type": "object"}, "evidence_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+  }
+}

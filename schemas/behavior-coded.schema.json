@@ -1,0 +1,11 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://civilization-lab.invalid/schemas/behavior-coded.schema.json",
+  "type":"object","additionalProperties":false,
+  "required":["schema_version","run_id","packet_ref","mapping_ref","codebook_ref","coder","annotations","reviewed_refs","supersedes","coverage_complete"],
+  "properties":{
+    "schema_version":{"const":"1.0.0"},"run_id":{"type":"string"},"packet_ref":{"type":"string"},"mapping_ref":{"type":"string"},"codebook_ref":{"type":"string"},
+    "coder":{"type":"object","additionalProperties":false,"required":["id","version","mode","rules_ref","prompt_ref"],"properties":{"id":{"type":"string"},"version":{"type":"string"},"mode":{"enum":["blinded_human","blinded_automated","synthetic_fixture"]},"rules_ref":{"type":"string"},"prompt_ref":{"type":["string","null"]}}},
+    "annotations":{"type":"array","items":{"type":"object"}},"reviewed_refs":{"type":"array","uniqueItems":true,"items":{"type":"string"}},"supersedes":{"type":["string","null"]},"coverage_complete":{"const":true}
+  }
+}

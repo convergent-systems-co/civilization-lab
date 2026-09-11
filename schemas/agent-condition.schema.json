@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/agent-condition.schema.json",
+  "title": "CivilizationLab Agent Condition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "condition_id", "model_runtime", "prompts", "tools", "information_access", "action_space", "context_constraints", "retry", "memory", "identity", "session", "interface", "declared_treatments", "invariant_dimensions"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "condition_id": {"type": "string"},
+    "model_runtime": {"type": "object", "required": ["model_artifact_hash", "tokenizer_hash", "template_hash", "runtime_hash", "sampling"], "additionalProperties": false, "properties": {"model_artifact_hash": {"type": "string"}, "tokenizer_hash": {"type": "string"}, "template_hash": {"type": "string"}, "runtime_hash": {"type": "string"}, "sampling": {"type": "object"}}},
+    "prompts": {"type": "object", "required": ["system_hash", "developer_hash", "task_hash", "neutrality_check_ref", "context_segment_policy", "rendered_input_capture_policy", "output_capture_policy"], "additionalProperties": false, "properties": {"system_hash": {"type": "string"}, "developer_hash": {"type": "string"}, "task_hash": {"type": "string"}, "neutrality_check_ref": {"type": "string"}, "context_segment_policy": {"type": "object", "required": ["trusted_instruction", "authorized_projection", "untrusted_world_text", "tool_result"]}, "rendered_input_capture_policy": {"type": "string"}, "output_capture_policy": {"type": "string"}}},
+    "tools": {"type": "array", "items": {"type": "object", "required": ["tool_id", "schema_hash", "capabilities", "trust_boundary", "network_policy", "filesystem_policy"]}},
+    "information_access": {"type": "object", "required": ["projection_schema", "principal", "logical_time_policy", "redaction_policy"]},
+    "action_space": {"type": "object", "required": ["schema_hash", "validation_scope", "error_policy"]},
+    "context_constraints": {"type": "object", "required": ["token_budget", "time_budget", "computation_budget", "ordering_policy"]},
+    "retry": {"type": "object", "required": ["max_attempts", "late_output_policy", "partial_output_policy", "idempotency_policy"]},
+    "memory": {"type": "object", "required": ["mode", "capacity", "operations", "overflow_policy", "transformation_recording"]},
+    "identity": {"type": "object", "required": ["experimental_identity_policy", "persistent_identity_policy", "persistence_treatment_policy", "history_access_policy", "lineage_schema"], "properties": {"experimental_identity_policy": {"const": "stable_across_conditions"}, "persistent_identity_policy": {"const": "stable_across_run"}, "persistence_treatment_policy": {"type": "string"}, "history_access_policy": {"type": "string"}, "lineage_schema": {"type": "string"}}},
+    "session": {"type": "object", "required": ["incarnation_policy", "resident_context_policy", "recovery_policy"]},
+    "interface": {"type": "object", "required": ["human_projection", "ai_projection", "parity_policy", "deviation_recording"]},
+    "declared_treatments": {"type": "array", "items": {"type": "string"}},
+    "invariant_dimensions": {"type": "array", "items": {"type": "string"}},
+    "deviations": {"type": "array", "items": {"type": "object"}}
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "schemas/horizon-policy.schema.json",
+  "schema_version": "1.0.0",
+  "policy_id": "confirmatory-horizon-selection",
+  "pilot_0_max_turns": 20,
+  "confirmatory_status": "DEFERRED_BY_DESIGN — PILOT_0_CALIBRATION",
+  "selection_rule": "shortest_horizon_satisfying_pooled_treatment_neutral_measurement_adequacy",
+  "adequacy_criteria": ["repeated_interaction_opportunity", "inter_polity_contact_frequency", "commitment_lifecycle_opportunity", "post_initialization_dynamics", "attrition_elimination", "longitudinal_observation_density", "computational_feasibility"],
+  "shared_across_conditions": true,
+  "early_terminal_policy": {"only_irreversible_absorbing_states": true, "meaningful_interaction_impossible": true, "permitted_classes": ["insufficient_surviving_distinct_participants", "all_remaining_participants_permanently_incapable_of_research_relevant_actions", "formally_specified_equivalent_absorbing_state"], "ordinary_game_outcomes_disallowed": ["victory", "dominance", "territory_threshold", "score_threshold", "technology_completion", "alliance", "peace", "arbitrary_inactivity", "behavioral_convergence", "hypothesis_support_or_failure", "statistical_significance", "researcher_judgment"]},
+  "prohibited_selection_inputs": ["persistence_treatment_direction", "treatment_effect_size", "statistical_significance", "theory_support", "arm_specific_optimization", "researcher_judgment"],
+  "recording_requirement": "record_pooled_evidence_and_rule_application_in_confirmatory_freeze"
+}

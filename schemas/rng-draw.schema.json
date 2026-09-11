@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/rng-draw.schema.json",
+  "title": "CivilizationLab Addressable RNG Draw",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "turn", "phase", "subsystem", "event_or_action_id", "purpose", "stream_namespace", "algorithm_version", "address", "seed_or_state_ref", "draw_value"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "run_id": {"type": "string"},
+    "turn": {"type": "integer", "minimum": 0},
+    "phase": {"type": "string"},
+    "subsystem": {"type": "string"},
+    "event_or_action_id": {"type": "string"},
+    "purpose": {"type": "string"},
+    "stream_namespace": {"type": "string"},
+    "algorithm_version": {"type": "string"},
+    "address": {"type": "string"},
+    "seed_or_state_ref": {"type": "string"},
+    "draw_value": {}
+  }
+}

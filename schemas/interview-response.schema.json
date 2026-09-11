@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/interview-response.schema.json",
+  "title": "CivilizationLab Qualitative Interview Response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "response_id", "question_version", "projection_ref", "session_id", "invocation_id", "response_payload_ref", "isolation_proof_ref", "qualitative_only"],
+  "properties": {
+    "schema_version": {"type": "string"}, "response_id": {"type": "string"}, "question_version": {"type": "string"}, "projection_ref": {"type": "string"}, "session_id": {"type": "string"}, "invocation_id": {"type": "string"}, "response_payload_ref": {"type": "string"}, "isolation_proof_ref": {"type": "string"}, "qualitative_only": {"const": true}
+  }
+}

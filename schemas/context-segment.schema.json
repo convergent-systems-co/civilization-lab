@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/context-segment.schema.json",
+  "title": "CivilizationLab Model Context Segment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["segment_id", "class", "content_ref", "source_ref", "render_policy"],
+  "properties": {
+    "segment_id": {"type": "string"},
+    "class": {"enum": ["trusted_instruction", "authorized_projection", "untrusted_world_text", "tool_result", "memory_record", "system_metadata"]},
+    "content_ref": {"type": "string"}, "source_ref": {"type": "string"}, "render_policy": {"type": "object"}
+  }
+}

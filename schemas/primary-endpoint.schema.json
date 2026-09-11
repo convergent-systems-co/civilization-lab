@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/primary-endpoint.schema.json",
+  "title": "CivilizationLab Primary Endpoint Specification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "endpoint_id", "claim_class", "experimental_unit", "observational_grains", "dependency_structure", "interference_assumption", "aggregation", "directionality", "standardization", "weighting", "components", "missingness", "temporal", "coding", "independent_reporting", "sensitivity", "qualitative_or_theoretical_exclusion"],
+  "properties": {
+    "schema_version": {"const": "2.0.0"}, "endpoint_id": {"type": "string"}, "claim_class": {"const": "primary_confirmatory"}, "experimental_unit": {"const": "run"}, "observational_grains": {"type": "array", "items": {"type": "string"}}, "dependency_structure": {"type": "string"}, "interference_assumption": {"type": "string"}, "aggregation": {"type": "object", "required": ["order", "run_function", "representation"]}, "directionality": {"type": "string"}, "standardization": {"type": "object", "required": ["method", "formula", "arm_specific"], "properties": {"arm_specific": {"const": false}}}, "weighting": {"type": "object"}, "components": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "object", "required": ["component_id", "source", "definition", "denominator", "grain", "coordinates"], "properties": {"grain": {"const": "run"}, "definition": {"type": "string", "minLength": 10}, "denominator": {"type": "string", "minLength": 5}}}}, "missingness": {"type": "object"}, "temporal": {"type": "object"}, "coding": {"type": "object", "properties": {"treatment_blind": {"const": true}}}, "independent_reporting": {"const": true}, "sensitivity": {"type": "object"}, "qualitative_or_theoretical_exclusion": {"type": "array", "items": {"type": "string"}}
+  }
+}

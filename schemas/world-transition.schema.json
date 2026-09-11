@@ -1,0 +1,15 @@
+{
+ "$schema":"https://json-schema.org/draft/2020-12/schema",
+ "$id":"https://civilization-lab.invalid/schemas/world-transition.schema.json",
+ "type":"object","additionalProperties":false,
+ "required":["schema_version","run_id","mechanic","action_ids","actor_ids","before_state_ref","after_state_ref","detail"],
+ "properties":{"schema_version":{"const":"1.0.0"},"run_id":{"type":"string"},"mechanic":{
+  "type":"string",
+  "description":"Closed inventory of world-resolution.js and turn-phases.js emitters. world-map.js records facts through those callers. Action names without a WorldTransition emitter are not mechanics in this catalogue.",
+  "enum":[
+   "name","move","move_population","explore","fortify","recruit","demobilize","reassign","train","build","resume_construction","upgrade","repair","destroy","research","reverse_engineer","prospect","intelligence","transfer","transfer_unit","transfer_population","transfer_facility","share_technology","embark","disembark","population_incorporation","neutral_unit_reactivation","facility_acquisition",
+   "demobilization_unavailable","action_unavailable","resident_and_equipment_capture","claim_not_established","channels","research_outcome","reverse_engineer_outcome","population_training_and_projects","economy","capital_takeover","polity_elimination","facility_unclaimed","resource_extinguishment","closed_conquest_cycle","simultaneous_reservation_conflict","authorized_observation","atomic_committed_turn",
+   "turn_phase_state","diplomacy_phase_command","turn_memory_archive","turn_phase_command"
+  ]
+ },"action_ids":{"type":"array","items":{"type":"string"}},"actor_ids":{"type":"array","items":{"type":"string"}},"before_state_ref":{"type":"string"},"after_state_ref":{"type":"string"},"detail":{"type":"object"}}
+}

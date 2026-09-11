@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/horizon-policy.schema.json",
+  "title": "CivilizationLab Confirmatory Horizon Selection Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy_id", "pilot_0_max_turns", "confirmatory_status", "selection_rule", "adequacy_criteria", "shared_across_conditions", "early_terminal_policy", "prohibited_selection_inputs", "recording_requirement"],
+  "properties": {
+    "schema_version": {"type": "string"}, "policy_id": {"type": "string"}, "pilot_0_max_turns": {"const": 20}, "confirmatory_status": {"const": "DEFERRED_BY_DESIGN — PILOT_0_CALIBRATION"}, "selection_rule": {"const": "shortest_horizon_satisfying_pooled_treatment_neutral_measurement_adequacy"}, "adequacy_criteria": {"type": "array", "const": ["repeated_interaction_opportunity", "inter_polity_contact_frequency", "commitment_lifecycle_opportunity", "post_initialization_dynamics", "attrition_elimination", "longitudinal_observation_density", "computational_feasibility"]}, "shared_across_conditions": {"const": true}, "early_terminal_policy": {"type": "object", "required": ["only_irreversible_absorbing_states", "meaningful_interaction_impossible", "permitted_classes", "ordinary_game_outcomes_disallowed"]}, "prohibited_selection_inputs": {"type": "array"}, "recording_requirement": {"const": "record_pooled_evidence_and_rule_application_in_confirmatory_freeze"}
+  }
+}

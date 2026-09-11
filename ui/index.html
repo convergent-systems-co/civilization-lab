@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>CivilizationLab · Your world</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<a class="skip" href="#map-heading">Skip to world map</a>
+<main>
+  <header class="masthead"><div><p class="eyebrow"><span class="brand-mark" aria-hidden="true">⬡</span> CIVILIZATIONLAB <span class="muted">/ PILOT 0</span></p><h1 id="world-title">A world to discover.</h1><p class="muted" id="subtitle">Shape the future of your civilization.</p></div><div class="header-actions"><span id="status" class="badge" role="status">Signed out</span><button id="refresh" type="button" hidden>Refresh observation</button><button id="logout" type="button" hidden>Clear session</button></div></header>
+  <p id="error" class="notice danger" role="alert" hidden></p>
+  <section id="login" class="login-panel"><p class="eyebrow">YOUR CIVILIZATION</p><h2>Enter your world</h2><p>Use the private access credential supplied for your session.</p><form id="session"><label for="credential">Participant access credential</label><input id="credential" type="password" autocomplete="off" spellcheck="false" required><button type="submit" class="primary">Open session <span aria-hidden="true">↗</span></button></form><p class="muted">Credentials are cleared when you leave this page.</p></section>
+  <div id="game" hidden>
+    <section class="turnbar" aria-label="Turn state"><div><span class="eyebrow">LOGICAL TIME</span><strong id="turn">—</strong></div><div><span class="eyebrow">PHASE</span><strong id="phase">—</strong></div><div><span class="eyebrow">DEADLINE</span><strong id="deadline">—</strong></div><p id="execution-status" class="muted"></p><button id="phase-ready" type="button" disabled>Finish this phase</button></section>
+    <div class="player-layout">
+      <aside class="sidebar">
+        <section class="panel"><p class="eyebrow">YOUR CIVILIZATION</p><h2>At a glance</h2><div id="resources"></div><div id="advantages"></div></section>
+        <section class="panel"><p class="eyebrow">CONTACT</p><h2>Known polities</h2><div id="polities"></div></section>
+      </aside>
+      <section class="world-panel panel">
+        <div class="section-heading"><div><p class="eyebrow">THE KNOWN WORLD</p><h2 id="map-heading" tabindex="-1">Territory & discovery</h2></div><span class="badge">Your knowledge</span></div>
+        <div class="map-tools"><label for="map-layer">Overlay</label><select id="map-layer"><option value="terrain">Terrain & control</option><option value="resources">Observed resources</option><option value="movement">Movement</option><option value="detection">Detection range</option><option value="combat">Attack range</option></select><button type="button" id="zoom-out" aria-label="Zoom out">−</button><button type="button" id="zoom-in" aria-label="Zoom in">+</button></div>
+        <div id="range-controls" hidden><label for="range-entity">Range from your unit or population group</label><select id="range-entity"></select><p class="muted small">Ranges use known terrain and your current capabilities. They do not reveal unseen targets or new observations.</p></div>
+        <div id="map" class="map-viewport" aria-label="Authorized projected world map"></div>
+        <div class="legend" aria-label="Map legend"><span><i class="owned-key"></i>Your territory</span><span>≠ Contested</span><span>★ Capital</span><span>▣ Facility</span><span>◆ Unit</span><span class="stale-key">Dashed: last known</span></div>
+        <p class="muted small">Arrow keys navigate hexes. Enter or Space inspects. Unknown areas contain no inferred positions.</p>
+        <details id="tile-inspector"><summary>Selected hex details</summary><p id="tile-detail" role="status" aria-live="polite">Select a hex to inspect its observation.</p><div id="tile-facts"></div></details>
+      </section>
+      <section class="panel order-panel"><p class="eyebrow">PLAN YOUR NEXT MOVE</p><h2>Orders</h2><p class="muted small">Orders are submitted together for simultaneous resolution. An invalid submission is lost.</p><form id="action-form"><label for="action-type">Action</label><select id="action-type"></select><fieldset id="action-fields"><legend>Action details</legend></fieldset><button id="add-action" type="submit">Add to draft</button></form><ol id="draft" aria-label="Draft orders"></ol><div class="button-row"><button id="submit-actions" type="button" class="primary">Commit orders</button><button id="clear-draft" type="button">Clear draft</button></div><p id="action-status" role="status" aria-live="polite"></p></section>
+    </div>
+    <div class="dashboard-grid">
+      <section class="panel"><p class="eyebrow">PEOPLE</p><h2>Population & assignments</h2><div id="population"></div></section>
+      <section class="panel"><p class="eyebrow">CAPABILITY</p><h2>Operational units</h2><div id="units"></div></section>
+      <section class="panel"><p class="eyebrow">PRODUCTION</p><h2>Facilities & construction</h2><div id="facilities"></div></section>
+      <section class="panel"><p class="eyebrow">KNOWLEDGE</p><h2>Technology & research</h2><div id="technology"></div></section>
+      <section class="panel wide"><p class="eyebrow">DIPLOMACY</p><h2>Communications</h2><p class="muted small">Public broadcasts and private rooms are distinct. Write commitments in your own words; transfers and other actions are submitted separately.</p><div id="channels"></div><div id="messages" class="message-list"></div><button id="compose" type="button">Compose a message</button></section>
+      <section class="panel"><p class="eyebrow">RETAINED NOTES</p><h2>Your current memory</h2><pre id="memory" class="prose"></pre></section>
+      <section class="panel"><p class="eyebrow">OBSERVATIONS</p><h2>Knowledge & reports</h2><div id="knowledge"></div><div id="validation"></div></section>
+    </div>
+  </div>
+  <footer><span>CivilizationLab · Pilot 0</span><span>Continuity · autonomy · possibility</span></footer>
+</main><script type="module" src="/app.js"></script>
+</body></html>

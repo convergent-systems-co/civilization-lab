@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/canonical-event.schema.json",
+  "title": "CivilizationLab Canonical Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_catalogue_version", "event_id", "run_id", "turn", "phase", "sequence", "event_type", "event_type_version", "catalogue_entry_ref", "payload_schema_ref", "payload_schema_version", "payload", "participants", "visibility", "causality", "lineage", "provenance", "integrity"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "event_catalogue_version": {"type": "string"},
+    "event_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "turn": {"type": "integer", "minimum": 0},
+    "phase": {"type": "string"},
+    "sequence": {"type": "integer", "minimum": 0},
+    "event_type": {"type": "string"},
+    "event_type_version": {"type": "string"},
+    "catalogue_entry_ref": {"type": "string"},
+    "payload_schema_ref": {"type": "string"},
+    "payload_schema_version": {"type": "string"},
+    "payload": {},
+    "participants": {"type": "array", "items": {"type": "string"}},
+    "visibility": {"type": "object", "required": ["classification", "acl_ref", "encryption_ref"]},
+    "causality": {"type": "object", "required": ["causation_ids", "correlation_id"]},
+    "lineage": {"type": "object", "required": ["persistent_identity_ids", "session_ids", "invocation_ids", "parent_event_ids"]},
+    "provenance": {"type": "object", "required": ["source", "operation", "input_refs", "configuration_hash", "recorded_by"]},
+    "rng": {"type": ["object", "null"]},
+    "integrity": {"type": "object", "required": ["canonical_bytes_hash", "previous_hash", "append_authority"]}
+  }
+}

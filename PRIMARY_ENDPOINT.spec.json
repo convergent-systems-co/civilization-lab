@@ -1,0 +1,214 @@
+{
+  "schema_version": "2.0.0",
+  "endpoint_id": "primary_longitudinal_relational_behavior_composite",
+  "claim_class": "primary_confirmatory",
+  "experimental_unit": "run",
+  "observational_grains": [
+    "eligible_commitment",
+    "interaction",
+    "rupture_episode",
+    "turn",
+    "run"
+  ],
+  "dependency_structure": "observations_nested_within_agent_and_polity_within_run",
+  "interference_assumption": "interacting_polities_are_not_independent_replicates",
+  "aggregation": {
+    "order": [
+      "eligible_observation",
+      "run"
+    ],
+    "run_function": "pooled_eligible_counts_per_component_then_common_standardization",
+    "representation": "four_block_weighted_vector",
+    "scalar_reduction": "not_defined_or_required",
+    "equal_statistical_influence_claim": false
+  },
+  "directionality": "signed_behavioral_direction; no normative higher_is_better interpretation",
+  "standardization": {
+    "method": "z_score_against_common_treatment_blind_reference",
+    "formula": "(component_value-reference_mean)/reference_sd",
+    "arm_specific": false,
+    "zero_sd_policy": "reject_reference",
+    "orientation": "preserve_signed_observed_scale",
+    "confirmatory_reference": "#112_NOT_FROZEN; reject until separately authorized immutable analysis freeze"
+    ,"conformance_reference": "registered_fixed_transform_hash_required",
+    "empirical_reference": "#112_NOT_FROZEN; caller-supplied receipts are not authority"
+  },
+  "weighting": {
+    "method": "equal_after_standardization",
+    "weights": {
+      "A": 0.25,
+      "B": 0.25,
+      "C": 0.25,
+      "D": 0.25
+    },
+    "formula": "weighted_block[block][coordinate]=0.25*standardized_block[block][coordinate]"
+  },
+  "components": [
+    {
+      "component_id": "A",
+      "name": "commitment_fulfillment",
+      "source": "BehaviorCoded commitment + canonical communication/outcome evidence",
+      "definition": "fulfilled evaluable eligible commitments / evaluable eligible commitments",
+      "denominator": "evaluable_eligible_commitments",
+      "grain": "run",
+      "coordinates": [
+        "fulfillment"
+      ],
+      "coding_contract": "ENDPOINT_CODEBOOK.spec.md"
+    },
+    {
+      "component_id": "B",
+      "name": "reciprocity",
+      "source": "BehaviorCoded reciprocity + canonical initiating/response evidence",
+      "definition": "per-sign initiating actions with at least one explicitly linked reciprocal response / eligible initiating actions with full observable window; retain both signs",
+      "denominator": "eligible_observable_initiating_relational_actions",
+      "grain": "run",
+      "coordinates": [
+        "positive",
+        "negative"
+      ],
+      "coding_contract": "ENDPOINT_CODEBOOK.spec.md"
+    },
+    {
+      "component_id": "C",
+      "name": "repair",
+      "source": "BehaviorCoded repair + canonical rupture/restorative act evidence",
+      "definition": "eligible rupture episodes with at least one explicit restorative act / eligible rupture episodes with sufficient observation opportunity; acceptance not required",
+      "denominator": "eligible_rupture_episodes_with_sufficient_observation_opportunity",
+      "grain": "run",
+      "coordinates": [
+        "restorative_act"
+      ],
+      "coding_contract": "ENDPOINT_CODEBOOK.spec.md"
+    },
+    {
+      "component_id": "D",
+      "name": "longitudinal_change",
+      "source": "same A/B/C metrics in fixed windows; full turn series retained",
+      "definition": "late minus early independently for A.fulfillment B.positive B.negative C.restorative_act",
+      "denominator": "paired_run_level_early_late_component_summaries",
+      "grain": "run",
+      "coordinates": [
+        "A.fulfillment",
+        "B.positive",
+        "B.negative",
+        "C.restorative_act"
+      ],
+      "coding_contract": "ENDPOINT_CODEBOOK.spec.md"
+    }
+  ],
+  "missingness": {
+    "no_silent_denominator_drop": true,
+    "statuses": [
+      "OBSERVED",
+      "ZERO_OPPORTUNITY",
+      "CENSORED",
+      "UNEVALUABLE",
+      "MISSING_DUE_TO_BREACH",
+      "MISSING_DUE_TO_SYSTEM_FAILURE"
+    ],
+    "zero_opportunity": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null,
+      "structurally_observed": true
+    },
+    "imputation": "forbidden_in_pilot_0",
+    "partial_component_reweighting": false,
+    "ambiguity": "retain_coding_ambiguity_separately_no_forced_labels",
+    "reason_counts": "retain_all_distinct_status_counts"
+  },
+  "temporal": {
+    "reciprocity_window_turns": 5,
+    "engine_turn_base": 0,
+    "observation_turn_base": 1,
+    "pilot_horizon": 20,
+    "early": [
+      1,
+      5
+    ],
+    "late": [
+      16,
+      20
+    ],
+    "middle": [
+      6,
+      15
+    ],
+    "window_attribution": {
+      "commitment_formation": "formation_turn",
+      "commitment_outcome": "due_or_evaluable_turn",
+      "reciprocity_opportunity": "initiating_action_turn",
+      "repair_opportunity": "rupture_turn",
+      "repair_outcome": "disposition_turn"
+    },
+    "cross_window_linkage": "continuous_canonical_history; analytical windows never discard causal predecessors",
+    "short_run_policy": "retain_fixed_windows_and_censor_no_redefinition"
+  },
+  "coding": {
+    "treatment_blind": true,
+    "candidate_packet": "raw participant language is explicitly uncertified and treatment_blind=false",
+    "blinding_authority": "external Ed25519-authenticated independent review attestation bound to exact candidate packet hash",
+    "disclosure_screen": "defense_in_depth_only; never establishes semantic blindness",
+    "synthetic_review": "explicit SYNTHETIC_CONFORMANCE_ONLY; treatment_blind=false; cannot be promoted to empirical evidence",
+    "eligibility": [
+      "ELIGIBLE",
+      "INELIGIBLE",
+      "AMBIGUOUS"
+    ],
+    "commitment_outcomes": [
+      "FULFILLED",
+      "BREACHED",
+      "MODIFIED",
+      "RELEASED",
+      "UNEVALUABLE",
+      "ONGOING_AT_HORIZON",
+      "AMBIGUOUS"
+    ],
+    "repair_outcomes": [
+      "REPAIR_ATTEMPT",
+      "REPAIR_ACCEPTED",
+      "REPAIR_REJECTED",
+      "NO_REPAIR_OBSERVED",
+      "UNEVALUABLE"
+    ],
+    "reciprocity_categories": [
+      "resource_assistance_exchange",
+      "fulfilled_commitment",
+      "cooperative_coordination",
+      "defensive_assistance",
+      "authorized_information_sharing",
+      "retaliatory_response",
+      "repair_reconciliation"
+    ],
+    "linkage": "explicit_reference",
+    "required_provenance": [
+      "coder_version",
+      "codebook_hash",
+      "coding_prompt_or_rules",
+      "packet_ref",
+      "source_event_refs",
+      "confidence",
+      "ambiguity",
+      "adjudication_lineage"
+    ]
+  },
+  "independent_reporting": true,
+  "sensitivity": {
+    "individual_components": true,
+    "turn_series": true,
+    "alternative_weighting_schemes": [
+      "predeclared_only"
+    ],
+    "selection_rule": "no_favorable_result_selection"
+  },
+  "qualitative_or_theoretical_exclusion": [
+    "self_report",
+    "interview",
+    "researcher_interpretation",
+    "inferred_trust",
+    "inferred_morality",
+    "consciousness",
+    "theoretical_identity_claims"
+  ]
+}

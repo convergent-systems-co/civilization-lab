@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/interference-design.schema.json",
+  "title": "CivilizationLab Interference Design",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "assignment_unit", "exposure_mapping", "direct_estimand", "spillover_estimand", "total_estimand", "overall_estimand", "composition_policy", "analysis_model", "interference_boundary"],
+  "properties": {
+    "schema_version": {"type": "string"}, "assignment_unit": {"enum": ["run", "polity", "agent"]}, "exposure_mapping": {"type": "object"}, "direct_estimand": {"type": "object"}, "spillover_estimand": {"type": "object"}, "total_estimand": {"type": "object"}, "overall_estimand": {"type": "object"}, "composition_policy": {"type": "object"}, "analysis_model": {"type": "object"}, "interference_boundary": {"type": "object"}
+  }
+}

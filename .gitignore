@@ -1,32 +1,28 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
+dist/
+.DS_Store
+node_modules/
+coverage/
+*.log
 
-# Test binary, built with `go test -c`
-*.test
+# Local orchestration, graph indexes, and generated calibration/run data.
+.ai/
+graphify-out/
+calibration/runs/
+artifacts/private/
+CLAUDE.md
+CODEX.md
 
-# Code coverage profiles and other test artifacts
-*.out
-coverage.*
-*.coverprofile
-profile.cov
-
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-# Go workspace file
-go.work
-go.work.sum
-
-# env file
+# Credentials and local environment configuration are never repository evidence.
 .env
+.env.*
+!.env.example
+*.pem
+*.key
 
-# Editor/IDE
-# .idea/
-# .vscode/
+# Hugging Face/model caches and weight artifacts remain outside Git.
+.cache/
+.huggingface/
+__pycache__/
+*.pyc
+*.safetensors
+*.gguf

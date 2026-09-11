@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/event-catalogue-entry.schema.json",
+  "title": "CivilizationLab Mandatory Event Catalogue Entry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_type", "event_type_version", "payload_schema_ref", "payload_schema_version", "trigger", "source", "logical_time", "identity_lineage", "causal_refs", "state_refs", "visibility", "provenance", "research_relevance"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "event_type": {"type": "string"},
+    "event_type_version": {"type": "string"},
+    "payload_schema_ref": {"type": "string"},
+    "payload_schema_version": {"type": "string"},
+    "trigger": {"type": "string"},
+    "source": {"type": "string"},
+    "logical_time": {"type": "object"},
+    "identity_lineage": {"type": "object"},
+    "causal_refs": {"type": "object"},
+    "state_refs": {"type": "object"},
+    "visibility": {"type": "object"},
+    "provenance": {"type": "object"},
+    "research_relevance": {"type": "boolean"}
+  }
+}

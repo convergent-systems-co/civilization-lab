@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/parameter-registry.schema.json",
+  "title": "CivilizationLab Parameter Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "registry_version", "numeric_policy", "parameters", "unknown_parameter_policy"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "registry_version": {"type": "string"},
+    "numeric_policy": {"type": "object", "required": ["representation", "scale_policy", "rounding", "overflow", "underflow", "comparison"]},
+    "parameters": {"type": "array", "items": {"$ref": "parameter-registry-entry.schema.json"}},
+    "unknown_parameter_policy": {"const": "confirmatory_validation_fails_closed"}
+  }
+}

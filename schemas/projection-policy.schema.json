@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/projection-policy.schema.json",
+  "title": "CivilizationLab Projection Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy_version", "participant_fields", "participant_denials", "surface_inheritance", "fail_closed", "human_ai_parity"],
+  "properties": {
+    "schema_version": {"type": "string"}, "policy_version": {"type": "string"}, "participant_fields": {"type": "array", "items": {"type": "string"}}, "participant_denials": {"type": "array", "items": {"type": "string"}}, "surface_inheritance": {"type": "array", "items": {"type": "string"}}, "fail_closed": {"const": true}, "human_ai_parity": {"const": true}
+  }
+}

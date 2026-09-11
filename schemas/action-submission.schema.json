@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/action-submission.schema.json",
+  "title": "CivilizationLab Action Submission",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "submission_id", "run_id", "turn_id", "actor_id", "actor", "phase", "projection_id", "projection_version_ref", "projection_hash", "actions", "action_hash", "status", "validation", "atomicity", "catalogue_version"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "submission_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "turn_id": {"type": "string"},
+    "actor_id": {"type": "string"},
+    "actor": {"type": "object", "required": ["persistent_identity_id", "session_id", "invocation_id"]},
+    "turn": {"type": "integer", "minimum": 0},
+    "phase": {"type": "string"},
+    "projection_id": {"type": "string"},
+    "projection_version_ref": {"type": "string"},
+    "projection_hash": {"type": "string"},
+    "submitted_actions": {"type": "array", "items": {"type": "object"}},
+    "actions": {"type": "array", "items": {"type": "object", "required": ["action_id"], "properties": {"action_id": {"type": "string"}}}},
+    "action_hash": {"type": "string"},
+    "status": {"enum": ["draft", "submitted", "validated", "rejected", "accepted", "turn_committed", "resolved", "late", "duplicate", "superseded", "missing"]},
+    "validation": {"type": "object", "required": ["projection_scoped", "deterministic", "public_safe_errors"]},
+    "atomicity": {"type": "object", "required": ["turn_committed_ref", "immutable_after_commit"], "properties": {"turn_committed_ref": {"type": ["string", "null"]}, "immutable_after_commit": {"type": "boolean"}}},
+    "retry": {"type": ["object", "null"]},
+    "prior_submission_id": {"type": ["string", "null"]},
+    "catalogue_version": {"type": "string"}
+  }
+}

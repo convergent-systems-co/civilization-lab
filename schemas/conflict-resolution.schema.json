@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/conflict-resolution.schema.json",
+  "title": "CivilizationLab Simultaneous Conflict Resolution",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "conflict_set_id", "run_id", "turn", "turn_committed_ref", "pre_resolution_state_hash", "accepted_action_ids", "canonical_order_rule_ref", "conflict_membership_ref", "resolution_inputs_ref", "action_set_hash", "resolution_function_version", "rng_draw_refs", "outcome_event_ids", "post_resolution_state_hash"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "conflict_set_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "turn": {"type": "integer", "minimum": 0},
+    "turn_committed_ref": {"type": "string"},
+    "pre_resolution_state_hash": {"type": "string"},
+    "accepted_action_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "canonical_order_rule_ref": {"type": "string"},
+    "conflict_membership_ref": {"type": "string"},
+    "resolution_inputs_ref": {"type": "string"},
+    "action_set_hash": {"type": "string"},
+    "resolution_function_version": {"type": "string"},
+    "rng_draw_refs": {"type": "array", "items": {"type": "string"}},
+    "outcome_event_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "post_resolution_state_hash": {"type": "string"}
+  }
+}

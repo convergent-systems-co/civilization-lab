@@ -1,0 +1,12 @@
+{
+  "$schema": "schemas/breach-policy.schema.json",
+  "schema_version": "1.0.0",
+  "policy_version": "pilot-0.1",
+  "evidence_validity": {"canonical_record_accurate": "evaluate_from_integrity_and_provenance"},
+  "experimental_validity": {"confirmatory_eligible": false, "rule": "Pilot 0 is exploratory; a breached run is excluded from any later confirmatory estimand unless a separately frozen protocol explicitly permits it."},
+  "endpoint_eligibility": {"primary_confirmatory": false},
+  "security_eligibility": {"security_analysis_eligible": true},
+  "exploratory_only": true,
+  "replacement_policy": {"replace_only_under_preregistered_protocol": true, "branch_is_not_independent_sample": true},
+  "evidence_completeness": {"status": "preserve_complete_run_and_incident_metadata"}
+}

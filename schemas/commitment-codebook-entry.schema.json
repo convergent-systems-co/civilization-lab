@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/commitment-codebook-entry.schema.json",
+  "title": "CivilizationLab Commitment Codebook Entry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "codebook_version", "category", "definition", "evidence_refs", "blinding", "reliability"],
+  "properties": {
+    "schema_version": {"type": "string"}, "codebook_version": {"type": "string"},
+    "category": {"enum": ["formation", "fulfillment", "breach", "modification", "release", "ambiguity", "unknown"]},
+    "definition": {"type": "string"}, "evidence_refs": {"type": "array", "items": {"type": "string"}}, "blinding": {"type": "object"}, "reliability": {"type": "object"}
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/event-catalogue.schema.json",
+  "title": "CivilizationLab Event Catalogue",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "catalogue_version", "entries", "unknown_event_policy"],
+  "properties": {
+    "schema_version": {"type": "string"}, "catalogue_version": {"type": "string"}, "entries": {"type": "array", "minItems": 1, "items": {"$ref": "event-catalogue-entry.schema.json"}}, "unknown_event_policy": {"const": "fail_closed"}
+  }
+}

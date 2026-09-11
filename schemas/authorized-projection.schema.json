@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/authorized-projection.schema.json",
+  "title": "CivilizationLab Authorized Projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "projection_id", "run_id", "principal", "logical_time", "source_state_hash", "fields", "redactions", "surface_policy", "cache_policy", "export_policy"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "projection_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "principal": {"type": "object", "required": ["principal_id", "principal_type", "acl_version"]},
+    "logical_time": {"type": "object", "required": ["turn", "phase", "event_head"]},
+    "source_state_hash": {"type": "string"},
+    "fields": {"type": "array", "items": {"type": "object", "required": ["path", "value", "source_event_refs", "audience"]}},
+    "redactions": {"type": "array", "items": {"type": "object"}},
+    "surface_policy": {"type": "object", "required": ["prompt", "memory", "api", "ui", "accessibility", "replay", "debug"]},
+    "cache_policy": {"type": "object", "required": ["principal_bound", "logical_time_bound", "version_bound"]},
+    "export_policy": {"type": "object", "required": ["audience", "retention_class", "disclosure_rule"]}
+  }
+}

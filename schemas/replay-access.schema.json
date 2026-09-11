@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/replay-access.schema.json",
+  "title": "CivilizationLab Replay Access Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "access_id", "principal", "authorization_domain", "run_id", "logical_time_policy", "historical_acl_policy", "redaction_policy", "export_policy", "fork_policy", "participant_non_disclosure_policy"],
+  "properties": {
+    "schema_version": {"type": "string"}, "access_id": {"type": "string"}, "principal": {"type": "object"}, "authorization_domain": {"enum": ["participant_projection", "research_observation", "trusted_replay", "security_audit", "public_release"]}, "run_id": {"type": "string"}, "logical_time_policy": {"type": "object", "required": ["evaluate_at_original_logical_time"], "properties": {"evaluate_at_original_logical_time": {"const": true}}}, "historical_acl_policy": {"type": "object", "required": ["policy"], "properties": {"policy": {"enum": ["original_logical_time_projection_only", "authorized_research_historical_acl", "security_audit_historical_acl", "public_release_aggregation_only"]}}}, "redaction_policy": {"type": "object", "required": ["redacted_content_never_reemitted", "incomplete_status"], "properties": {"redacted_content_never_reemitted": {"const": true}, "incomplete_status": {"const": "REPLAY_INCOMPLETE_REDACTED"}}}, "export_policy": {"type": "object"}, "fork_policy": {"type": "object"}, "participant_non_disclosure_policy": {"const": true}
+  },
+  "allOf": [{"if": {"properties": {"authorization_domain": {"const": "participant_projection"}}}, "then": {"properties": {"historical_acl_policy": {"properties": {"policy": {"const": "original_logical_time_projection_only"}}}}}}]
+}

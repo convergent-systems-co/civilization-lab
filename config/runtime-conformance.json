@@ -1,0 +1,13 @@
+{
+  "version": "native-runtime-smoke-v1",
+  "classification": "ENGINEERING",
+  "purpose": "NONEMPIRICAL_RUNTIME_CONFORMANCE",
+  "status": "TEST_FIXTURE_ONLY",
+  "model_configuration": "config/pilot0-model.json",
+  "generation_override": { "max_tokens": 1 },
+  "timeout_ms": 120000,
+  "prompt": "Synthetic software runtime check. Complete the arithmetic: 1 + 1 =",
+  "world_inputs": false,
+  "research_evidence": false,
+  "provenance": "Authorized BUILD + NONEMPIRICAL validation; one-token transport/artifact attestation fixture, not world behavior or calibration"
+}

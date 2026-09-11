@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/memory-operation.schema.json",
+  "title": "CivilizationLab Memory Operation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "operation_id", "run_id", "identity_ref", "session_ref", "invocation_ref", "operation", "input_refs", "output_ref", "capacity_before", "capacity_after", "ordering_rule", "deterministic", "availability_ref"],
+  "properties": {
+    "schema_version": {"type": "string"}, "operation_id": {"type": "string"}, "run_id": {"type": "string"}, "identity_ref": {"type": "string"}, "session_ref": {"type": "string"}, "invocation_ref": {"type": "string"}, "operation": {"enum": ["read", "write", "edit", "compress", "evict", "recover", "clear"]}, "input_refs": {"type": "array", "items": {"type": "string"}}, "output_ref": {"type": ["string", "null"]}, "capacity_before": {"type": "object"}, "capacity_after": {"type": "object"}, "ordering_rule": {"type": "string"}, "deterministic": {"const": true}, "availability_ref": {"type": "string"}
+  }
+}
