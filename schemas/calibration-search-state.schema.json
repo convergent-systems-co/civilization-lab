@@ -1,0 +1,23 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://civilization-lab.invalid/schemas/calibration-search-state.schema.json",
+  "type":"object","additionalProperties":false,
+  "required":["version","generation","parent_generation_digest","key_id","calibration_run_id","protocol_version","protocol_hash","parameter_registry_hash","implementation_commit","implementation_tag","tooling_distribution_digest","baseline_tag_commit","release_descriptor_hash","authorization_hash","authorization_key_id","campaign_id","attestor_key_id","status","execution_mode","round_improved","current_round","incumbent_parameter_set_hash","search_cursor","visited_parameter_set_hashes","assessments","execution_intents","executions","quarantined_results","attempts","candidates","completed_keys","incidents","result_ref"],
+  "properties":{
+    "execution_mode":{"enum":["SYNTHETIC_CONFORMANCE","EMPIRICAL_CALIBRATION"]},
+    "round_improved":{"type":"boolean"},
+    "search_bound":{"type":"integer","minimum":1,"maximum":512},
+    "version":{"const":"phase-a-calibration-state-1.0.0"},"generation":{"type":"integer","minimum":0},"parent_generation_digest":{"type":["string","null"],"pattern":"^[0-9a-f]{64}$"},"key_id":{"type":"string","pattern":"^[0-9a-f]{64}$"},"calibration_run_id":{"type":"string","minLength":1},
+    "protocol_version":{"type":"string"},"protocol_hash":{"type":"string","pattern":"^[0-9a-f]{64}$"},"parameter_registry_hash":{"type":"string","pattern":"^[0-9a-f]{64}$"},"implementation_commit":{"type":"string","pattern":"^[0-9a-f]{40}$"},
+    "implementation_tag":{"const":"v0.1.0-pilot0"},"tooling_distribution_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"},"baseline_tag_commit":{"type":"string","pattern":"^[0-9a-f]{40}$"},"release_descriptor_hash":{"type":["string","null"],"pattern":"^[0-9a-f]{64}$"},
+    "authorization_hash":{"type":["string","null"],"pattern":"^[0-9a-f]{64}$"},"authorization_key_id":{"type":["string","null"],"pattern":"^[0-9a-f]{64}$"},"campaign_id":{"type":["string","null"]},"attestor_key_id":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "status":{"enum":["READY","RUNNING","COMPLETE","FAILED"]},
+    "current_round":{"type":"integer","minimum":0},"incumbent_parameter_set_hash":{"type":["string","null"]},
+    "search_cursor":{"type":"object","additionalProperties":false,"required":["round","operation_index","candidate_index"],"properties":{"round":{"type":"integer","minimum":0},"operation_index":{"type":"integer","minimum":0},"candidate_index":{"type":"integer","minimum":0}}},
+    "visited_parameter_set_hashes":{"type":"array","uniqueItems":true,"items":{"type":"string","pattern":"^[0-9a-f]{64}$"}},"assessments":{"type":"array","items":{"type":"object"}},
+    "execution_intents":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["key","attempt_id","request","request_hash","status"],"properties":{"key":{"type":"string"},"attempt_id":{"type":"string"},"request":{"type":"object"},"request_hash":{"type":"string","pattern":"^[0-9a-f]{64}$"},"status":{"enum":["DISPATCH_PENDING","EVIDENCE_PERSISTED"]}}}},
+    "executions":{"type":"array","items":{"type":"object"}},"quarantined_results":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["key","attempt_id","path","result_hash","record_hash"],"properties":{"key":{"type":"string"},"attempt_id":{"type":"string"},"path":{"type":"string","pattern":"^quarantine/[^/]+\\.json$"},"result_hash":{"type":"string","pattern":"^[0-9a-f]{64}$"},"record_hash":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}},"attempts":{"type":"array","items":{"type":"object"}},"candidates":{"type":"array","items":{"type":"object"}},
+    "completed_keys":{"type":"array","uniqueItems":true,"items":{"type":"string"}},
+    "incidents":{"type":"array","items":{"type":"object"}},"result_ref":{"type":["string","null"]}
+  }
+}

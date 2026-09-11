@@ -5,7 +5,9 @@ import { EVENT_TYPES, sha256 } from "../src/core.js";
 import { PILOT_0_CONFIG } from "../src/world.js";
 import { assertValidSchema, assertSupportedSchema } from "../src/schema.js";
 import { validateEndpointContract } from "../src/analysis.js";
-import { validateCalibrationProtocol } from "../src/calibration.js";
+import { calibrationProtocol, validateCalibrationProtocol } from "../src/calibration.js";
+import { CALIBRATION_FAILURES, CALIBRATION_TOOLING_VERSION, resolvedCalibrationBaselineTag, startingCalibrationParameterSet, validateCalibrationParameterSet } from "../src/calibration-runner.js";
+import { PHASE_A_POLICY_PACKAGE, validatePhaseAPolicyPackage } from "../src/calibration-policy.js";
 
 const root = resolve(import.meta.dirname, "..");
 const schemasDir = resolve(root, "schemas");
@@ -25,6 +27,9 @@ const horizon = await json(resolve(root, "HORIZON_POLICY.spec.json"));
 const breach = await json(resolve(root, "BREACH_POLICY.spec.json"));
 const model = await json(resolve(root, "config/pilot0-model.json"));
 const calibration = await json(resolve(root, "PILOT_0_CALIBRATION_PROTOCOL.spec.json"));
+const calibrationPolicyPackage = await json(resolve(root, "config/phase-a-policy-package.json"));
+const calibrationTrustPolicy = await json(resolve(root, "config/calibration-trust-policy.json"));
+const preCalibrationBaseline = await json(resolve(root, "validation/PRE_CALIBRATION_BASELINE.json"));
 assertValidSchema(model, "hf-model-config.schema.json");
 check(model.context_budget > model.generation.max_tokens, "model output budget exhausts context");
 check(model.runtime !== "mlx-lm" || (model.dtype === "checkpoint" && model.device === "metal"), "MLX loading configuration mismatch");
@@ -40,6 +45,9 @@ if (model.artifact_manifest) {
 assertValidSchema(parameters, "parameter-registry.schema.json");
 assertValidSchema(calibration, "calibration-protocol.schema.json");
 validateCalibrationProtocol(calibration, parameters);
+assertValidSchema(calibrationPolicyPackage, "phase-a-policy-package.schema.json");
+validatePhaseAPolicyPackage(calibrationPolicyPackage);
+check(sha256(calibrationPolicyPackage) === sha256(PHASE_A_POLICY_PACKAGE), "loaded Phase A policy package differs from validated runtime package");
 
 check(catalogue.unknown_event_policy === "fail_closed", "event catalogue must fail closed");
 check(catalogue.entries.length === EVENT_TYPES.size, "event catalogue is incomplete");
@@ -61,5 +69,28 @@ check(breach.exploratory_only === true && breach.experimental_validity.confirmat
 for (const key of ["map", "economy", "population", "combat", "memory", "phases"]) check(PILOT_0_CONFIG[key] && Object.values(PILOT_0_CONFIG[key]).every((v) => v !== null && v !== undefined), `Pilot 0 config has missing ${key} defaults`);
 check(calibration.status === "FROZEN_BEFORE_EMPIRICAL_CALIBRATION", "calibration protocol is not frozen before execution");
 check(calibration.authorization.empirical_calibration === false, "calibration protocol improperly authorizes execution");
+check(calibrationTrustPolicy.version === "phase-a-deployment-trust-policy-1.0.0" &&
+  ["PROVISIONED", "UNPROVISIONED_FAIL_CLOSED"].includes(calibrationTrustPolicy.status),
+"calibration deployment trust policy is malformed");
+check(Array.isArray(calibrationTrustPolicy.approved_release_key_ids) &&
+  Array.isArray(calibrationTrustPolicy.approved_authorization_key_ids) &&
+  [...calibrationTrustPolicy.approved_release_key_ids, ...calibrationTrustPolicy.approved_authorization_key_ids]
+    .every(value => /^[0-9a-f]{64}$/.test(value)),
+"calibration deployment trust-policy allowlists are malformed");
+check(new Set(calibrationTrustPolicy.approved_release_key_ids).size === calibrationTrustPolicy.approved_release_key_ids.length &&
+  new Set(calibrationTrustPolicy.approved_authorization_key_ids).size === calibrationTrustPolicy.approved_authorization_key_ids.length,
+"calibration deployment trust-policy allowlists contain duplicates");
+check(calibrationTrustPolicy.status === "PROVISIONED" ||
+  calibrationTrustPolicy.approved_release_key_ids.length === 0 && calibrationTrustPolicy.approved_authorization_key_ids.length === 0,
+"unprovisioned calibration deployment trust policy must fail closed with empty allowlists");
+check(CALIBRATION_TOOLING_VERSION === "phase-a-calibration-tooling-1.0.0", "calibration tooling version is not frozen");
+check(Object.keys(CALIBRATION_FAILURES).length === 7, "calibration failure taxonomy is incomplete");
+// Resolution shells out to git: a clone without the v0.1.0-pilot0 annotated tag must fail as a
+// readable FAIL line below, not abort this validator with an assertion stack trace.
+const resolvedBaseline = (() => { try { return resolvedCalibrationBaselineTag(); } catch (error) { return `unresolved (${error.message})`; } })();
+check(resolvedBaseline === "8f06baae4cda7d6fbd9d61924b5c615f4a45ba59", `calibration runner baseline tag does not resolve to the frozen implementation commit: ${resolvedBaseline}`);
+check(preCalibrationBaseline.git.tag === "v0.1.0-pilot0", "frozen implementation baseline tag drifted");
+check(calibrationProtocol().protocol_version === "pilot-0-calibration-1.1.0", "bound calibration protocol version drifted");
+validateCalibrationParameterSet(startingCalibrationParameterSet());
 
 if (failures.length) { console.error(failures.map((x) => `FAIL ${x}`).join("\n")); process.exitCode = 1; } else console.log(`validated ${schemas.size} schemas, ${catalogue.entries.length} catalogue entries, Pilot 0 and calibration contracts`);

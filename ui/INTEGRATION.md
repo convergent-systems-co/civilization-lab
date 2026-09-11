@@ -57,10 +57,12 @@ read from `own.intelligence.facts`. Unrecognized projection fields fail closed.
   `/private/tmp/civilization-player-mobile.png`, and
   `/private/tmp/civilization-observer-desktop.png` (synthetic fixtures only).
 
-## Backend boundary to resolve
+## Empty accepted-action turns
 
-If every active actor is rejected, `commitTurn()` currently refuses an empty
-validated set. RunService correctly accounts for rejections but reaches the same
-guard. The fallback HTTP path leaves that turn pending. Supporting a canonical
-zero-accepted-action turn belongs to the commitment/replay implementation; the
-UI does not synthesize accepted waits or restore lost action opportunities.
+The earlier integration checkpoint reported that an all-rejected turn remained
+pending because `commitTurn()` refused an empty validated set. That checkpoint is
+superseded. The current service commits a canonical zero-accepted-action boundary,
+advances through the real world reducer, and does not fabricate accepted waits or
+restore rejected action opportunities. Replay re-executes the empty committed turn.
+This behavior is covered by `test/server-apparatus.test.js` and
+`test/replay-boundaries.test.js`.

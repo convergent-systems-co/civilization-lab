@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/pilot0-world-configuration.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "execution_mode", "evidence_class", "implementation_commit", "implementation_tag", "tooling_distribution_digest", "baseline_tag_commit", "release_descriptor_hash", "protocol_version", "protocol_hash", "parameter_registry_hash", "policy_package_id", "policy_package_version", "policy_package_hash", "policy_assignment_hashes", "parameter_set_hash", "parameter_set", "artifact_attestation"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "status": {"enum": ["PROPOSED_NOT_RESEARCH_AUTHORIZED", "SYNTHETIC_CONFORMANCE_ONLY_NOT_A_WORLD_PROPOSAL"]},
+    "execution_mode": {"enum": ["SYNTHETIC_CONFORMANCE", "EMPIRICAL_CALIBRATION"]},
+    "evidence_class": {"enum": ["SYNTHETIC_SOFTWARE_CONFORMANCE", "EMPIRICAL_CALIBRATION_EVIDENCE"]},
+    "implementation_commit": {"type": "string"},
+    "implementation_tag": {"const": "v0.1.0-pilot0"},
+    "tooling_distribution_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "baseline_tag_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "release_descriptor_hash": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "protocol_version": {"type": "string"},
+    "protocol_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "parameter_registry_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "policy_package_id": {"const": "civilizationlab-phase-a-coverage-panel"},
+    "policy_package_version": {"const": "phase-a-policy-panel-1.0.0"},
+    "policy_package_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "policy_assignment_hashes": {"type": "array", "minItems": 24, "maxItems": 24, "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+    "parameter_set_hash": {"type": "string"},
+    "parameter_set": {"type": "object"},
+    "artifact_attestation": {"type": "object"}
+  }
+}

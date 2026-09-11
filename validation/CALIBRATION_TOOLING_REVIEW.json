@@ -1,0 +1,157 @@
+{
+  "schema_version": "1.0.0",
+  "review_version": "phase-a-calibration-tooling-review-1.3.0",
+  "scope": "Synthetic/non-empirical implementation validation only",
+  "verification_status": "POST_POLICY_IMPLEMENTATION_AND_ADVERSARIAL_PASS",
+  "supersession": {
+    "supersedes_status": "FOCUSED_PASS_FULL_SUITE_DEFERRED",
+    "full_suite_observed_on": "2026-09-11",
+    "full_suite_scope": "non-empirical pre-policy calibration-tooling baseline",
+    "full_suite": {
+      "total": 823,
+      "passed": 823,
+      "failed": 0,
+      "skipped": 0
+    },
+    "qualification": "This 823-test result remains the historical pre-policy baseline. It is preserved separately from the later post-policy result and is not represented as having validated the policy package or production adapter."
+  },
+  "specialists": [
+    {
+      "specialist": "treatment_leakage",
+      "attacks": ["forbidden treatment names", "treatment-bearing values", "recursive base64 and hexadecimal encodings", "raw evidence capability", "arm-comparison and endpoint queries", "neutral-context persistence history"],
+      "status": "PASS"
+    },
+    {
+      "specialist": "search_integrity",
+      "attacks": ["first-passing baseline", "incomplete qualifying frontier", "search-order winner", "manual substitution", "unregistered parameter", "missing or selective seeds", "stopping bypass", "archive-history deletion or mutation"],
+      "status": "PASS"
+    },
+    {
+      "specialist": "provenance_and_attestation",
+      "attacks": ["synthetic/empirical mode confusion", "archive-key attestor fallback", "manifest forgery", "fabricated metrics", "incomplete evidence", "baseline/protocol/domain mismatch", "resume candidate adoption without independent attestation"],
+      "status": "PASS"
+    },
+    {
+      "specialist": "adapter_sandbox",
+      "attacks": ["package mutation before execute/recover", "package mutation during worker operation", "external and dynamic import bypass", "unbound returned digest", "empirical child process", "unsigned environment access", "permission drift", "encoded credential exfiltration"],
+      "status": "PASS"
+    },
+    {
+      "specialist": "authority_binding",
+      "attacks": ["replacement calibration run identity", "campaign mismatch", "authority key reuse", "release/adapter/evidence/head mismatch", "untrusted execution receipt", "expired authorization at dispatch", "archive and signing-key redirection"],
+      "status": "PASS"
+    },
+    {
+      "specialist": "runtime_fidelity",
+      "attacks": ["model-use declaration mismatch", "model/tokenizer/runtime/source drift", "persistence history in neutral context", "artifact substitution", "non-neutral replay condition"],
+      "status": "PASS"
+    },
+    {
+      "specialist": "metric_validity",
+      "attacks": ["noncanonical action identifiers", "per-polity denominator drift", "casualty-recovery lineage loss", "reciprocity coding supersession", "channel contact omission", "technology snapshot-delta omission", "dimensionally mismatched economy ratio", "heterogeneous-unit variance", "floating-point normalization drift"],
+      "status": "PASS"
+    },
+    {
+      "specialist": "recovery",
+      "attacks": ["crash around execution and persistence", "duplicate counting", "skipped required work", "discarded failure", "state corruption", "resume lineage inconsistency", "signed running-head candidate forgery"],
+      "status": "PASS"
+    },
+    {
+      "specialist": "research_validity",
+      "attacks": ["empirical execution during conformance", "synthetic evidence promotion", "treatment-directed output", "mutable protocol semantics", "selection without complete frontier"],
+      "status": "PASS"
+    }
+  ],
+  "completed_focused_test_runs": [
+    {
+      "scope": "release trust, adversarial hardening, production metrics, and metric oracles",
+      "total": 116,
+      "passed": 116,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "scope": "archive panel retention",
+      "total": 20,
+      "passed": 20,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "scope": "CLI authorization",
+      "total": 7,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "scope": "execution boundary and recovery",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "scope": "search integrity",
+      "total": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "scope": "calibration tooling",
+      "total": 28,
+      "passed": 28,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "scope": "partial-round resume targeted regression",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "scope": "frozen binding, protocol, and publication recovery",
+      "total": 65,
+      "passed": 65,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "post_policy_validation": {
+    "observed_on": "2026-09-11",
+    "scope": "complete non-empirical Phase A apparatus with fixed deterministic policy package and production adapter",
+    "contract_validation": "PASS: 50 schemas, 25 catalogue entries, Pilot 0 and calibration contracts",
+    "build_validation": "PASS",
+    "full_suite": {
+      "total": 848,
+      "passed": 848,
+      "failed": 0,
+      "skipped": 0
+    },
+    "policy_coverage": "PASS: all 24 frozen seeds plus constructed reducer-backed fixtures",
+    "empirical_execution": false,
+    "model_inference": false
+  },
+  "resolved_adversarial_findings": [
+    "adapter-returned evidence is quarantined and retained before post-return validation",
+    "evidence finalization is idempotently bound to execution intent",
+    "typed failure classifications survive client, isolated worker, and parent boundaries",
+    "authority and release trust domains are pairwise distinct and deadline bounded",
+    "policy coverage requires actual accepted actions and canonical reducer events",
+    "role priority sequencing exercises each advertised world-mechanic branch",
+    "contact coverage requires canonical discovery rather than direct hidden-state access",
+    "runtime and relational opportunity metrics are no-Qwen treatment-neutral apparatus measures"
+  ],
+  "contract_validation": "PASS: 50 schemas, 25 catalogue entries, Pilot 0 and calibration contracts",
+  "build_validation": "PASS",
+  "full_suite": "PASS_848_OF_848_POST_POLICY",
+  "pending_gates": [],
+  "p0_findings": [],
+  "p1_findings": [],
+  "final_p0_p1_disposition": "ALL_DISCOVERED_P0_P1_IMPLEMENTATION_FINDINGS_FIXED_AND_RETESTED",
+  "empirical_calibration_executed": false,
+  "empirical_calibration_authorized": false
+}

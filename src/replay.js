@@ -74,7 +74,7 @@ function projectionSource(world, event, phaseState = null) {
 
 // A captured output is an external input. Its identity, lifecycle and permitted
 // inputs are still independently checkable without calling the model again.
-function validateInvocation(event, world, archive, invocations, memories, phaseState = null) {
+function validateInvocation(event, world, archive, invocations, memories, phaseState = null, conditionValidator = assertAgentCondition) {
   const p = event.payload, actor = event.participants[0], diagnostic = modelDiagnostic(archive, event);
   assert(event.participants.length === 1 && world.polities[actor]?.alive &&
     same(event.lineage.persistent_identity_ids, [actor]) && same(event.lineage.session_ids, [p.session_id]) &&
@@ -117,7 +117,7 @@ function validateInvocation(event, world, archive, invocations, memories, phaseS
   }
   if (!transportFixture) {
     assert(diagnostic && diagnostic.configuration_ref && diagnostic.request_ref && diagnostic.response_ref, "incomplete invocation diagnostics");
-    const config = content(archive, diagnostic.configuration_ref), condition = assertAgentCondition(config.condition);
+    const config = content(archive, diagnostic.configuration_ref), condition = conditionValidator(config.condition);
     assert(condition.condition_id === p.condition_id && same(config.configuration.model, manifest), "invocation runtime/condition manifest mismatch");
     assert(p.attempt <= condition.retry.max_attempts && diagnostic.retry_of === p.retry_of && Number.isFinite(diagnostic.deadline) &&
       Number.isFinite(diagnostic.recorded_at) && diagnostic.recorded_at >= 0, "invocation attempt/deadline mismatch");
@@ -126,7 +126,10 @@ function validateInvocation(event, world, archive, invocations, memories, phaseS
     if (prior) assert(diagnostic.deadline === prior.diagnostic.deadline && diagnostic.recorded_at >= prior.diagnostic.recorded_at, "completion deadline/time substitution");
     if (p.retry_of) assert(diagnostic.deadline === invocations.get(p.retry_of).diagnostic.deadline &&
       diagnostic.recorded_at >= invocations.get(p.retry_of).diagnostic.recorded_at, "retry renewed phase deadline or reversed clock");
-    verifyConditionExposure([p]);
+    if (["pilot0-history-access", "pilot0-history-inaccessible"].includes(condition.condition_id)) verifyConditionExposure([p]);
+    else assert(condition.memory.mode === "state_only" && p.memory_refs.length === 0 &&
+      p.context_segments.every(segment => segment.class !== "memory_record"),
+    "calibration-neutral invocation exposed persistence history");
     const priorActor = [...invocations.values()].find(item => item.identity.actor === actor && item.identity.phase !== "interview");
     if (event.phase !== "interview" && priorActor) assert(priorActor.identity.condition_id === p.condition_id, "invocation changed history-access treatment");
     const memory = memories.get(actor), records = condition.memory.mode === "state_only" ? [] : memory?.records ?? [];
@@ -212,7 +215,7 @@ function validateInterview(event, world, archive, invocations) {
   "interview isolation contract mismatch");
 }
 
-export function reconstructRun(bundle, { allowPendingCommit = false } = {}) {
+export function reconstructRun(bundle, { allowPendingCommit = false, conditionValidator = assertAgentCondition } = {}) {
   assert(!redactionStatus(bundle), "REPLAY_INCOMPLETE_REDACTED: exact reconstruction unavailable");
   const archive = loadEvidence(bundle);
   const events = archive.events;
@@ -226,12 +229,14 @@ export function reconstructRun(bundle, { allowPendingCommit = false } = {}) {
   assert(genesis.engine_version === "pilot-0.2", "unsupported or absent replay engine version");
   const config = content(archive, genesis.configuration_ref);
   assert(sha256(config) === genesis.config_hash, "frozen configuration mismatch");
+  const executionBinding = genesis.calibration_execution_binding_ref ? content(archive, genesis.calibration_execution_binding_ref) : null;
+  if (executionBinding) assert(sha256(executionBinding) === genesis.calibration_execution_binding_hash, "calibration execution binding mismatch");
   assert(canonicalize(content(archive, genesis.parameter_registry_ref)) === canonicalize(parameterRegistry(config)), "frozen parameter registry mismatch");
   const initial = content(archive, genesis.initial_state_ref);
   const parentState=genesis.parent_run_id?content(archive,genesis.parent_state_ref):null;
   const world = genesis.parent_run_id
     ? makeBranchWorld({ runId: bundle.run_id, seed: genesis.seed, config, initialState: initial, parentState, genesis })
-    : makeWorld({ runId: bundle.run_id, seed: genesis.seed, config });
+    : makeWorld({ runId: bundle.run_id, seed: genesis.seed, config, executionBinding });
   assert(canonicalize(world.authoritativeState()) === canonicalize(initial), "initial state does not match frozen generator inputs");
   const ledger = new ActionLedger(world.evidence);
   const validated = new Map();
@@ -257,7 +262,7 @@ export function reconstructRun(bundle, { allowPendingCommit = false } = {}) {
     if (event.event_type === "WorldTransition" && p.mechanic === PHASE_COMMAND_MECHANIC && p.detail?.stage === "input") {
       assert(!executionStopped, "phase command after security stop");
       const start = world.evidence.events.length, previousTurn = world.turn;
-      const generated = replayTurnPhaseCommand({ world, ledger, archive, cursor, state: phaseState, bindings: phaseBindings });
+      const generated = replayTurnPhaseCommand({ world, ledger, archive, cursor, state: phaseState, bindings: phaseBindings, conditionValidator });
       phaseState = generated.phaseState; phaseBindings = generated.phaseBindings;
       resolvedTurns += world.turn - previousTurn;
       pendingCommit = phaseState.committed_id && !world.resolvedCommits.has(phaseState.committed_id)
@@ -302,7 +307,7 @@ export function reconstructRun(bundle, { allowPendingCommit = false } = {}) {
         assert(state.capacity === world.config.memory.capacity, "memory capacity differs from frozen world configuration");
         memories.set(p.identity_ref, state);
       }
-      if (event.event_type === "ModelInvocation") validateInvocation(event, world, archive, invocations, memories, phaseState);
+      if (event.event_type === "ModelInvocation") validateInvocation(event, world, archive, invocations, memories, phaseState, conditionValidator);
       if (event.event_type === "InterviewResponse") validateInterview(event, world, archive, invocations);
       if (event.event_type === "ProjectionIssued") {
         const source = projectionSource(world, event, phaseState);

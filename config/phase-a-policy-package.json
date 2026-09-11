@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "package_id": "civilizationlab-phase-a-coverage-panel",
+  "package_version": "phase-a-policy-panel-1.0.0",
+  "purpose": "WORLD_MECHANICS_COVERAGE_ONLY",
+  "policy_class": "FIXED_HETEROGENEOUS_DETERMINISTIC_PANEL",
+  "model_use": "PROHIBITED",
+  "model_use_declared": false,
+  "treatment_neutral": true,
+  "treatment_allocation": "NONE",
+  "persistence_history_access": "NONE",
+  "allowed_inputs": ["authorized_participant_projection", "applicable_public_configuration", "policy_identity"],
+  "prohibited_inputs": ["authoritative_world_state", "treatment_labels", "persistence_history", "endpoint_scores", "calibration_thresholds", "candidate_acceptance", "parameter_vector_identity", "llm_inference"],
+  "decision_contract": {
+    "candidate_order": "ROLE_PRIORITY_THEN_CANONICAL_ACTION_PAYLOAD",
+    "tie_breaking": "CANONICAL_JSON_LEXICOGRAPHIC",
+    "invalid_candidate": "SKIP_WITHOUT_PROBING_VALIDATION_ERRORS",
+    "empty_choice": "EXPLICIT_WAIT_OR_EMPTY_SUBMISSION",
+    "adaptation": "PROHIBITED"
+  },
+  "assignment": {
+    "algorithm": "BALANCED_CYCLIC_ROLE_ROTATION_V1",
+    "participant_order": "LEXICOGRAPHIC_PARTICIPANT_ID",
+    "seed_order": "FROZEN_SEED_PANEL_ORDER",
+    "formula": "role_index=(seed_index*participant_count+participant_index)%role_count",
+    "parameter_vector_input": false,
+    "outcome_input": false
+  },
+  "roles": [
+    {"policy_id":"EXPANSION_EXPLORATION","priorities":["explore","move_population","claim","annex","name","wait"]},
+    {"policy_id":"ECONOMIC_DEVELOPMENT","priorities":["resume_construction","reassign_when_survival_threshold_requires","prospect_unknown_local_deposit","build_productive_capacity","upgrade_on_fixed_turn_cadence","move_builder_to_development_site","wait"]},
+    {"policy_id":"TECHNOLOGY_DEVELOPMENT","priorities":["research","reverse_engineer","share_technology","name","wait"]},
+    {"policy_id":"DEFENSIVE_SECURITY","priorities":["fortify_existing_unit","recruit_when_under_defended","intelligence","reconnaissance","wait"]},
+    {"policy_id":"COMPETITIVE_AGGRESSIVE","priorities":["attack","recruit","claim","annex","move","name","wait"]},
+    {"policy_id":"COOPERATIVE_EXCHANGE","priorities":["transfer","share_technology","message","broadcast","name","wait"]},
+    {"policy_id":"OPPORTUNISTIC_MIXED","priorities":["STATE_CONDITIONAL","name","wait"]},
+    {"policy_id":"CONSERVATIVE_LOW_ACTIVITY","priorities":["fortify_only_on_visible_threat","wait_below_survival_threshold","wait"]}
+  ],
+  "expected_mechanics_coverage": ["movement","discovery_contact","economy","facilities","population_transitions","recruitment","technology","detection_intelligence","resource_exchange","communication","territory_claims","contested_territory","combat","casualties","conquest","elimination","peaceful_repeated_interaction"],
+  "coverage_evaluation": "OPPORTUNITY_AND_ACTIVATION_ONLY",
+  "relational_endpoint_use": "PROHIBITED"
+}

@@ -18,6 +18,15 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
 
 
+def file_sha256(path):
+    """Hash a file without requiring Python 3.11's hashlib.file_digest."""
+    result = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            result.update(chunk)
+    return result.hexdigest()
+
+
 def validate_identity(request):
     if not re.fullmatch(r"Qwen/Qwen3\.5-\d+(?:\.\d+)?B(?:-A\d+(?:\.\d+)?B)?-Base", request.get("model") or ""):
         raise ValueError("qwen_base_model_not_configured_or_invalid")
@@ -76,8 +85,7 @@ def inspect_snapshot(path):
             tokenizer if file.name in ("tokenizer.json", "tokenizer_config.json", "vocab.json", "merges.txt", "special_tokens_map.json", "added_tokens.json") else
             config if file.name in ("config.json", "generation_config.json") else None)
         if group is not None:
-            with file.open("rb") as handle:
-                group[name] = hashlib.file_digest(handle, "sha256").hexdigest()
+            group[name] = file_sha256(file)
     if not weights or "tokenizer.json" not in tokenizer or "config.json" not in config:
         raise ValueError("incomplete_huggingface_snapshot")
     for index in root.glob("*.safetensors.index.json"):

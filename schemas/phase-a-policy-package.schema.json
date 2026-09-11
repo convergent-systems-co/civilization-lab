@@ -1,0 +1,27 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://civilization-lab.invalid/schemas/phase-a-policy-package.schema.json",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["schema_version","package_id","package_version","purpose","policy_class","model_use","model_use_declared","treatment_neutral","treatment_allocation","persistence_history_access","allowed_inputs","prohibited_inputs","decision_contract","assignment","roles","expected_mechanics_coverage","coverage_evaluation","relational_endpoint_use"],
+  "properties":{
+    "schema_version":{"const":"1.0.0"},
+    "package_id":{"const":"civilizationlab-phase-a-coverage-panel"},
+    "package_version":{"const":"phase-a-policy-panel-1.0.0"},
+    "purpose":{"const":"WORLD_MECHANICS_COVERAGE_ONLY"},
+    "policy_class":{"const":"FIXED_HETEROGENEOUS_DETERMINISTIC_PANEL"},
+    "model_use":{"const":"PROHIBITED"},
+    "model_use_declared":{"const":false},
+    "treatment_neutral":{"const":true},
+    "treatment_allocation":{"const":"NONE"},
+    "persistence_history_access":{"const":"NONE"},
+    "allowed_inputs":{"type":"array","minItems":3,"uniqueItems":true,"items":{"enum":["authorized_participant_projection","applicable_public_configuration","policy_identity"]}},
+    "prohibited_inputs":{"type":"array","minItems":8,"uniqueItems":true,"items":{"type":"string"}},
+    "decision_contract":{"type":"object","additionalProperties":false,"required":["candidate_order","tie_breaking","invalid_candidate","empty_choice","adaptation"],"properties":{"candidate_order":{"type":"string"},"tie_breaking":{"type":"string"},"invalid_candidate":{"type":"string"},"empty_choice":{"type":"string"},"adaptation":{"const":"PROHIBITED"}}},
+    "assignment":{"type":"object","additionalProperties":false,"required":["algorithm","participant_order","seed_order","formula","parameter_vector_input","outcome_input"],"properties":{"algorithm":{"const":"BALANCED_CYCLIC_ROLE_ROTATION_V1"},"participant_order":{"const":"LEXICOGRAPHIC_PARTICIPANT_ID"},"seed_order":{"const":"FROZEN_SEED_PANEL_ORDER"},"formula":{"type":"string"},"parameter_vector_input":{"const":false},"outcome_input":{"const":false}}},
+    "roles":{"type":"array","minItems":8,"maxItems":8,"items":{"type":"object","additionalProperties":false,"required":["policy_id","priorities"],"properties":{"policy_id":{"type":"string"},"priorities":{"type":"array","minItems":2,"items":{"type":"string"}}}}},
+    "expected_mechanics_coverage":{"type":"array","minItems":17,"uniqueItems":true,"items":{"type":"string"}},
+    "coverage_evaluation":{"const":"OPPORTUNITY_AND_ACTIVATION_ONLY"},
+    "relational_endpoint_use":{"const":"PROHIBITED"}
+  }
+}

@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { verify } from "node:crypto";
 import { assert, canonicalize, clone, sha256 } from "./core.js";
 import { assertValidSchema } from "./schema.js";
+import { divideHalfEven, decimalToScaled, fixedRatio, POOLED_RATIO_METRIC_IDS } from "./calibration-metrics.js";
 
 const protocol = JSON.parse(readFileSync(resolve(import.meta.dirname, "../PILOT_0_CALIBRATION_PROTOCOL.spec.json"), "utf8"));
 
@@ -43,9 +44,13 @@ export function validateCalibrationProtocol(activeProtocol = protocol, parameter
   assert(requiredDomains.size === 0, `missing calibration metric domains: ${[...requiredDomains].join(",")}`);
 
   const domainIds = new Set();
+  const deferred = new Set(activeProtocol.deferred_parameter_domains.flatMap(group => group.registry_parameter_ids));
+  assert(canonicalize([...deferred].sort()) === canonicalize(["model.context_budget", "model.generation", "model.retry"]),
+    "initial no-Qwen Phase A must hold all model execution parameters unsearched");
   for (const domain of activeProtocol.parameter_domains) {
     assert(!domainIds.has(domain.domain_id), `duplicate calibration parameter domain: ${domain.domain_id}`);
     domainIds.add(domain.domain_id);
+    assert(!deferred.has(domain.registry_parameter_id), `deferred no-Qwen parameter is searchable: ${domain.registry_parameter_id}`);
     for (const metricId of domain.calibration_metrics) assert(metricIds.has(metricId), `unknown linked calibration metric: ${metricId}`);
     assert(Object.keys(domain.allowed_domain).length > 0, `empty calibration domain: ${domain.domain_id}`);
   }
@@ -67,8 +72,13 @@ export function calibrationProtocol() { return clone(protocol); }
 
 export function enumerateCalibrationOperations(activeProtocol = protocol) {
   const operations = [{ operation: "BASELINE", domain_id: null, selector: null, value: null }];
+  // Initial Phase A is explicitly no-model. Model generation/context/retry values
+  // remain provenance-locked and are not searched until a separately authorized
+  // Qwen ecological-validation phase exists.
+  const noModelHeld = new Set(activeProtocol.deferred_parameter_domains.flatMap(group => group.registry_parameter_ids));
   const metadata = new Set(["kind", "minimum", "maximum", "step", "multipliers", "rounding", "must_equal", "fixed_fields", "preserve_profile_permutation_balance", "preserve_targets_prerequisites_domains", "permille_minimum", "permille_maximum", "positive_integer_minimum", "success_permille_minimum", "success_permille_maximum", "turn_minimum"]);
   for (const domain of activeProtocol.parameter_domains) {
+    if (noModelHeld.has(domain.registry_parameter_id)) continue;
     const allowed = domain.allowed_domain;
     if (["alias", "alias_group"].includes(allowed.kind)) continue;
     if (allowed.kind === "integer") {
@@ -123,44 +133,103 @@ export function createCalibrationSelectionView(manifests, { activeProtocol = pro
 }
 
 function fixed(value, activeProtocol) {
-  const scale = activeProtocol.metric_numeric_policy.scale;
-  const scaled = value * scale;
-  const rounded = Math.round(scaled);
-  assert(Number.isSafeInteger(rounded) && Math.abs(scaled - rounded) < 1e-6, "calibration metric exceeds fixed-point precision");
-  return rounded;
+  assert(typeof value === "number" && Number.isFinite(value), "invalid calibration metric value");
+  const text = String(value); assert(!/[eE]/.test(text), "exponential calibration metric forbidden");
+  const negative = text.startsWith("-"), [whole, fraction = ""] = (negative ? text.slice(1) : text).split(".");
+  const denominator = 10n ** BigInt(fraction.length);
+  const numerator = BigInt((whole || "0") + fraction) * (negative ? -1n : 1n);
+  return divideHalfEven(numerator * BigInt(activeProtocol.metric_numeric_policy.scale), denominator);
 }
 
-function divideHalfEven(numerator, denominator) {
-  assert(Number.isSafeInteger(numerator) && Number.isSafeInteger(denominator) && denominator > 0, "unsafe calibration aggregate");
-  const sign = numerator < 0 ? -1 : 1, absolute = Math.abs(numerator);
-  let quotient = Math.floor(absolute / denominator);
-  const remainder = absolute % denominator;
-  if (remainder * 2 > denominator || (remainder * 2 === denominator && quotient % 2 === 1)) quotient += 1;
-  return sign * quotient;
-}
-
+/**
+ * Aggregate either legacy signed-manifest projections or the isolated selector
+ * DTO. Each isolated-selector metric fact must have this closed shape:
+ * `{ status, value, numerator, denominator, eligibility_count }`. Exact decimal
+ * integer strings are mandatory because pooled rates are computed as
+ * `sum(numerator) / sum(denominator)`, never as a mean of per-seed ratios.
+ */
 export function aggregateCalibrationSelectionView(view, activeProtocol = protocol) {
   assert(Array.isArray(view) && view.length === activeProtocol.seed_panel.seeds.length, "complete calibration selection view required");
   assertTreatmentBlind(view, activeProtocol);
-  const hashes = new Set(view.map(row => row.parameter_set_hash));
+  // Retain the signed-manifest API; normalize only after validating the exact
+  // frozen panel. The isolated selector's opaque DTO uses the branch below.
+  if (view.some(row => Object.hasOwn(row, "seed"))) {
+    assert(view.every(row => typeof row.seed === "string" && typeof row.parameter_set_hash === "string" && !Object.hasOwn(row, "candidate_alias")), "mixed calibration selection formats");
+    assert(canonicalize(view.map(row => row.seed).sort()) === canonicalize([...activeProtocol.seed_panel.seeds].sort()), "selection view does not contain each frozen seed exactly once");
+    const hashes = new Set(view.map(row => row.parameter_set_hash));
+    assert(hashes.size === 1, "selection view mixes parameter sets");
+    // Legacy signed run manifests predate exact metric facts. Keep this public
+    // API compatible; production selector DTOs are the opaque form below and
+    // MUST carry status/value/numerator/denominator/eligibility_count.
+    const normalizedView = view.map(row => ({ candidate_alias: row.parameter_set_hash, opaque_seed_alias: row.seed, disposition: row.disposition,
+      metrics: Object.fromEntries(Object.entries(row.metrics).map(([id, value]) => [id, { status: "OBSERVED", value }])) }));
+    const result = aggregateCalibrationSelectionView(normalizedView, activeProtocol);
+    return { parameter_set_hash: [...hashes][0], seed_ids: view.map(row => row.seed).sort(), aggregate_metrics: result.aggregate_metrics };
+  }
+  const hashes = new Set(view.map(row => row.candidate_alias));
   assert(hashes.size === 1, "selection view mixes parameter sets");
-  assert(canonicalize(view.map(row => row.seed).sort()) === canonicalize([...activeProtocol.seed_panel.seeds].sort()), "selection view does not contain each frozen seed exactly once");
+  assert(new Set(view.map(row => row.opaque_seed_alias)).size === activeProtocol.seed_panel.seeds.length, "selection view does not contain each frozen seed exactly once");
   assert(view.every(row => row.disposition !== "PROTOCOL_INCIDENT"), "protocol incident invalidates candidate aggregation");
   const aggregate = {};
+  const aggregate_status = {};
+  const conditionalMedians = new Set(["contact.median_first_contact_turn", "technology.median_first_completion_turn", "information.median_discovery_turn"]);
   for (const metric of activeProtocol.metrics) {
-    const values = view.map(row => fixed(row.metrics[metric.metric_id], activeProtocol)).sort((a, b) => a - b);
+    const facts = view.map(row => row.metrics[metric.metric_id]);
+    assert(facts.every(fact => fact && ["OBSERVED", "ZERO_OPPORTUNITY", "CENSORED", "UNEVALUABLE"].includes(fact.status)), `selector metric status invalid: ${metric.metric_id}`);
+    const included = conditionalMedians.has(metric.metric_id) ? facts.filter(fact => fact.status === "OBSERVED") : facts;
+    aggregate_status[metric.metric_id] = { observed: facts.filter(fact => fact.status === "OBSERVED").length,
+      zero_opportunity: facts.filter(fact => fact.status === "ZERO_OPPORTUNITY").length,
+      censored: facts.filter(fact => fact.status === "CENSORED").length,
+      unevaluable: facts.filter(fact => fact.status === "UNEVALUABLE").length };
+    if (facts.some(fact => fact.status === "CENSORED" || fact.status === "UNEVALUABLE")) {
+      aggregate[metric.metric_id] = null;
+      continue;
+    }
+    if (metric.metric_id === "conflict.dominant_action_share" && view.every(row => Object.hasOwn(row, "opaque_run_alias"))) {
+      assert(facts.every(fact => fact.category_counts && typeof fact.category_counts === "object" && !Array.isArray(fact.category_counts)),
+        "dominant action share requires exact per-category counts");
+      const pooled = new Map();
+      for (const fact of facts) for (const [category, count] of Object.entries(fact.category_counts)) {
+        assert(Number.isSafeInteger(count) && count >= 0, "dominant action category count invalid");
+        pooled.set(category, (pooled.get(category) ?? 0) + count);
+      }
+      const denominator = [...pooled.values()].reduce((sum, count) => sum + count, 0);
+      aggregate[metric.metric_id] = denominator ? fixedRatio(Math.max(...pooled.values()), denominator, activeProtocol.metric_numeric_policy.scale) : 0;
+      continue;
+    }
+    if (POOLED_RATIO_METRIC_IDS.has(metric.metric_id) && view.every(row => Object.hasOwn(row, "opaque_run_alias"))) {
+      assert(facts.every(fact => /^-?\d+$/.test(fact.numerator ?? "") && /^\d+$/.test(fact.denominator ?? "") && /^\d+$/.test(fact.eligibility_count ?? "")),
+        `selector pooled metric requires exact counts: ${metric.metric_id}`);
+      const observed = facts.filter(fact => fact.status === "OBSERVED");
+      if (!observed.length) {
+        // A pooled rate with a structurally observed zero opportunity set is
+        // exactly zero, while censoring/unevaluability remains non-observation.
+        aggregate[metric.metric_id] = facts.every(fact => fact.status === "ZERO_OPPORTUNITY") ? 0 : null;
+        continue;
+      }
+      const numerator = observed.reduce((sum, fact) => sum + BigInt(fact.numerator), 0n);
+      const denominator = observed.reduce((sum, fact) => sum + BigInt(fact.denominator), 0n);
+      assert(denominator > 0n, `selector pooled metric requires a positive pooled denominator: ${metric.metric_id}`);
+      aggregate[metric.metric_id] = fixedRatio(numerator, denominator, activeProtocol.metric_numeric_policy.scale);
+      continue;
+    }
+    const values = included.map(fact => fact.status === "ZERO_OPPORTUNITY" ? 0n :
+      /^-?\d+$/.test(fact.scaled_value ?? "") ? BigInt(fact.scaled_value) : fixed(fact.value, activeProtocol))
+      .sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+    if (!values.length) { aggregate[metric.metric_id] = null; continue; }
     const reducer = activeProtocol.metric_aggregation_registry[metric.metric_id];
     let result;
     if (reducer === "MAXIMUM") result = values.at(-1);
-    else if (reducer === "MEDIAN") result = values.length % 2 ? values[(values.length - 1) / 2] : divideHalfEven(values[values.length / 2 - 1] + values[values.length / 2], 2);
-    else if (reducer === "MEAN") result = divideHalfEven(values.reduce((sum, value) => { const next = sum + value; assert(Number.isSafeInteger(next), "calibration metric aggregate overflow"); return next; }, 0), values.length);
+    else if (reducer === "MEDIAN") result = values.length % 2 ? values[(values.length - 1) / 2] : divideHalfEven(values[values.length / 2 - 1] + values[values.length / 2], 2n);
+    else if (reducer === "MEAN") result = divideHalfEven(values.reduce((sum, value) => sum + value, 0n), BigInt(values.length));
     else assert(false, `unknown calibration reducer: ${reducer}`);
-    aggregate[metric.metric_id] = result / activeProtocol.metric_numeric_policy.scale;
+    const numeric = Number(result) / activeProtocol.metric_numeric_policy.scale;
+    assert(Number.isFinite(numeric), "calibration aggregate overflow"); aggregate[metric.metric_id] = numeric;
   }
-  return { parameter_set_hash: [...hashes][0], seed_ids: view.map(row => row.seed).sort(), aggregate_metrics: aggregate };
+  return { candidate_alias: [...hashes][0], seed_aliases: view.map(row => row.opaque_seed_alias).sort(), aggregate_metrics: aggregate, aggregate_status };
 }
 
-export function assessCalibrationCandidate({ parameter_set_hash, seed_ids, aggregate_metrics, worst_seed_metric_pass_fraction = 0, cross_seed_metric_variance = 0, changes_from_start = 0 }, activeProtocol = protocol) {
+export function assessCalibrationCandidate({ parameter_set_hash, seed_ids, aggregate_metrics, aggregate_status = {}, worst_seed_metric_pass_fraction = 0, cross_seed_metric_variance = 0, changes_from_start = 0 }, activeProtocol = protocol) {
   assertTreatmentBlind({ aggregate_metrics }, activeProtocol);
   assert(/^[0-9a-f]{64}$/.test(parameter_set_hash), "invalid parameter set hash");
   assert(canonicalize([...seed_ids].sort()) === canonicalize([...activeProtocol.seed_panel.seeds].sort()), "candidate did not use the complete frozen seed panel");
@@ -171,13 +240,22 @@ export function assessCalibrationCandidate({ parameter_set_hash, seed_ids, aggre
   for (const metric of activeProtocol.metrics) {
     assert(Object.hasOwn(aggregate_metrics, metric.metric_id), `missing calibration metric: ${metric.metric_id}`);
     const value = aggregate_metrics[metric.metric_id];
+    if (value === null) {
+      const status = aggregate_status[metric.metric_id];
+      assert(status && Number.isSafeInteger(status.observed) && Number.isSafeInteger(status.zero_opportunity) &&
+        Number.isSafeInteger(status.censored) && Number.isSafeInteger(status.unevaluable), `missing calibration aggregate status: ${metric.metric_id}`);
+      failures.push({ metric_id: metric.metric_id, value: null, boundary: "OBSERVABLE_PANEL_METRIC", relation: "observability", aggregate_status: clone(status) });
+      minimumMargin = Math.min(minimumMargin, -1);
+      continue;
+    }
     assert(typeof value === "number" && Number.isFinite(value), `invalid calibration metric value: ${metric.metric_id}`);
     const { minimum, maximum } = metric.acceptance;
-    if (minimum !== undefined && value < minimum) failures.push({ metric_id: metric.metric_id, value, boundary: minimum, relation: "minimum" });
-    if (maximum !== undefined && value > maximum) failures.push({ metric_id: metric.metric_id, value, boundary: maximum, relation: "maximum" });
+    const scaledValue = BigInt(decimalToScaled(value));
+    if (minimum !== undefined && scaledValue < BigInt(decimalToScaled(minimum))) failures.push({ metric_id: metric.metric_id, value, boundary: minimum, relation: "minimum" });
+    if (maximum !== undefined && scaledValue > BigInt(decimalToScaled(maximum))) failures.push({ metric_id: metric.metric_id, value, boundary: maximum, relation: "maximum" });
     const margins = [];
-    if (minimum !== undefined) margins.push((value - minimum) / Math.max(Math.abs(minimum), 1));
-    if (maximum !== undefined) margins.push((maximum - value) / Math.max(Math.abs(maximum), 1));
+    if (minimum !== undefined) margins.push(fixedRatio(decimalToScaled(value) - decimalToScaled(minimum), decimalToScaled(Math.max(Math.abs(minimum), 1))));
+    if (maximum !== undefined) margins.push(fixedRatio(decimalToScaled(maximum) - decimalToScaled(value), decimalToScaled(Math.max(Math.abs(maximum), 1))));
     minimumMargin = Math.min(minimumMargin, ...margins);
   }
   return {
