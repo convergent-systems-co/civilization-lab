@@ -47,8 +47,8 @@ for (const kind of ["evidence", "attempt", "candidate", "result", "configuration
       assert.deepEqual(again.head, recovered.head, "recovery must be idempotent");
       assert.equal((await readdir(join(directory, "generations"))).filter(n => n.endsWith(".json")).length, committed ? 2 : 1);
       if (committed) {
-        const path = kind === "evidence" ? "evidence/transport.json" : kind === "attempt" ? "attempts/transport/manifest.json" :
-          kind === "candidate" ? "candidates/transport.json" : kind === "result" ? "CALIBRATION_RESULT.json" : "PILOT_0_WORLD_CONFIGURATION.json";
+        const path = ["evidence", "attempt", "candidate"].includes(kind) ? `evidence/transport-${kind}.json` :
+          kind === "result" ? "CALIBRATION_RESULT.json" : "PILOT_0_WORLD_CONFIGURATION.json";
         assert.deepEqual(JSON.parse(await readFile(join(directory, path), "utf8")), { synthetic_transport_fixture: true, kind });
       }
     });

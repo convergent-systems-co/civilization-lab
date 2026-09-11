@@ -34,7 +34,10 @@ export function syntheticCanonicalEvidence({ seed = syntheticSeedPanel()[0], tre
     ...(runtimeConfiguration ? { calibration_parameter_set_hash: runtimeConfiguration.parameter_set_hash,
       effective_configuration_hash: runtimeConfiguration.effective_configuration_hash,
       world_configuration: runtimeConfiguration.effective_configuration } : { world_configuration: fallbackWorld }) };
-  const initial = { run_id: store.runId, turn: 0, phase: "actions", polities: {}, terminal: false };
+  const initial = { run_id: store.runId, turn: 0, phase: "actions", terminal: false,
+    polities: Object.fromEntries(["a", "b", "c"].map(id => [id, { id, alive: true,
+      citizens: [{ id: `${id}-citizens`, count: 20 }], units: [{ id: `${id}-u`, crew: [{ count: 4 }] }],
+      knowledge: [id], reports: [] }])) };
   const configRef = store.putPayload(config, "configuration");
   const initialRef = store.putPayload(initial, "authoritative_research");
   store.append({ eventType: "RunCreated", turn: 0, phase: "setup", participants: ["a", "b", "c"], payload: {

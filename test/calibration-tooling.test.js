@@ -260,7 +260,9 @@ test("trusted head detects rollback and startup rejects orphan artifacts", async
 });
 
 test("stopping proof cannot be emitted without an accepted candidate", () => {
-  assert.throws(() => buildCalibrationResult({ candidates: [{ parameter_set_hash: "a".repeat(64), accepted: false, selection_score: {} }],
+  const parameter_set = startingCalibrationParameterSet();
+  const aggregate_metrics = Object.fromEntries(protocol.metrics.map(metric => [metric.metric_id, metric.acceptance.maximum !== undefined ? metric.acceptance.maximum + 1 : (metric.acceptance.minimum ?? 0) - 1]));
+  assert.throws(() => buildCalibrationResult({ candidates: [{ parameter_set, parameter_set_hash: sha256(parameter_set), aggregate_metrics, accepted: false, selection_score: {}, candidate_attestation_hash: "a".repeat(64) }],
     manifests: [], protocolVersion: protocol.protocol_version, implementationCommit: implementation, incidents: [] }), /STOP_CALIBRATION/);
 });
 

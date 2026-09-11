@@ -8,9 +8,10 @@ if (mode === "publish") {
   archive.trust.fault = async stage => { if (stage === point) process.kill(process.pid, "SIGKILL"); };
   const next = structuredClone(archive.state);
   let path;
-  if (kind === "evidence") { path = "evidence/transport.json"; next.executions.push({ key: "transport", path }); }
-  if (kind === "attempt") { path = "attempts/transport/manifest.json"; next.attempts.push({ attempt_id: "transport" }); }
-  if (kind === "candidate") { path = "candidates/transport.json"; next.candidates.push({ path }); }
+  if (["evidence", "attempt", "candidate"].includes(kind)) {
+    path = `evidence/transport-${kind}.json`;
+    next.executions.push({ key: `transport-${kind}`, path });
+  }
   if (kind === "result") path = "CALIBRATION_RESULT.json";
   if (kind === "configuration") path = "PILOT_0_WORLD_CONFIGURATION.json";
   // These are publication-transport fixtures, never admissible run evidence.
@@ -30,6 +31,11 @@ if (mode === "publish") {
 } else if (mode === "execute") {
   const runner = new PhaseACalibrationRunner({ directory, mode: "SYNTHETIC_CONFORMANCE",
     implementationCommit: "8f06baae4cda7d6fbd9d61924b5c615f4a45ba59", attestor: trust,
-    executor: async () => { process.send("executing"); await new Promise(() => {}); } });
+    executor: async () => {
+      // An unresolved Promise alone does not keep Node alive. Hold an IPC
+      // listener so the competing runner tests a live lease owner.
+      const release = new Promise(resolve => process.once("message", resolve));
+      process.send("executing"); await release;
+    } });
   await runner.run({ maximumCandidates: 1 });
 }

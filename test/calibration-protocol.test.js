@@ -64,6 +64,23 @@ function manifest(seed, overrides = {}) {
   return result;
 }
 
+function selectorFact(value, { status = "OBSERVED", numerator, denominator } = {}) {
+  if (status !== "OBSERVED") return { status, value: null, numerator: "0", denominator: "0", eligibility_count: "0" };
+  const d = denominator ?? 1_000_000;
+  const n = numerator ?? Math.round(value * d);
+  return { status, value, numerator: String(n), denominator: String(d), eligibility_count: String(d) };
+}
+
+function opaqueSelectorPanel(mutator = () => {}) {
+  const hash = "c".repeat(64);
+  return protocol.seed_panel.seeds.map((seed, index) => {
+    const metrics = Object.fromEntries(Object.entries(acceptedMetrics()).map(([id, value]) => [id, selectorFact(value)]));
+    mutator(metrics, index);
+    return { opaque_run_alias: `run-${index}`, opaque_seed_alias: `seed-${index}`, candidate_alias: hash,
+      metrics, disposition: "UNEVALUATED", treatment_blinding: protocol.blinding.selection_view };
+  });
+}
+
 test("calibration protocol is schema-valid, complete across registered calibration parameters, and non-authorizing", () => {
   assert.equal(validateCalibrationProtocol(protocol, parameters), true);
   assert.equal(protocol.authorization.empirical_calibration, false);
@@ -137,6 +154,46 @@ test("calibration aggregation is fixed-point, complete-panel, reducer-locked, an
   assert.throws(() => aggregateCalibrationSelectionView(view.slice(1)), /complete calibration selection view/);
   const mixed = structuredClone(view); mixed[0].parameter_set_hash = "f".repeat(64);
   assert.throws(() => aggregateCalibrationSelectionView(mixed), /mixes parameter sets/);
+});
+
+test("pooled rate aggregation sums exact opportunity counts instead of averaging seed ratios", () => {
+  const view = opaqueSelectorPanel((metrics, index) => {
+    metrics["runtime.deadline_failure_rate"] = index === 0
+      ? selectorFact(0.07, { numerator: 7, denominator: 100 })
+      : selectorFact(0, { numerator: 0, denominator: 1 });
+  });
+  const aggregate = aggregateCalibrationSelectionView(view);
+  assert.equal(aggregate.aggregate_metrics["runtime.deadline_failure_rate"], 0.056911);
+  assert.notEqual(aggregate.aggregate_metrics["runtime.deadline_failure_rate"], 0.002917,
+    "an unweighted mean of per-seed rates would manufacture a passing panel");
+  const assessment = assessCalibrationCandidate({ parameter_set_hash: "c".repeat(64), seed_ids: protocol.seed_panel.seeds,
+    aggregate_metrics: aggregate.aggregate_metrics, aggregate_status: aggregate.aggregate_status });
+  assert.equal(assessment.accepted, false);
+  assert.ok(assessment.failures.some(failure => failure.metric_id === "runtime.deadline_failure_rate"));
+});
+
+test("selector pooled-rate DTOs fail closed when exact counts are stripped", () => {
+  const view = opaqueSelectorPanel();
+  delete view[0].metrics["runtime.deadline_failure_rate"].numerator;
+  assert.throws(() => aggregateCalibrationSelectionView(view), /pooled metric requires exact counts/);
+});
+
+test("all-zero-opportunity conditional panels are retained as deterministic candidate failures", () => {
+  const view = opaqueSelectorPanel(metrics => {
+    metrics["contact.median_first_contact_turn"] = selectorFact(null, { status: "ZERO_OPPORTUNITY" });
+  });
+  const aggregate = aggregateCalibrationSelectionView(view);
+  assert.equal(aggregate.aggregate_metrics["contact.median_first_contact_turn"], null);
+  assert.deepEqual(aggregate.aggregate_status["contact.median_first_contact_turn"], {
+    observed: 0, zero_opportunity: 24, censored: 0, unevaluable: 0
+  });
+  const assessment = assessCalibrationCandidate({ parameter_set_hash: "c".repeat(64), seed_ids: protocol.seed_panel.seeds,
+    aggregate_metrics: aggregate.aggregate_metrics, aggregate_status: aggregate.aggregate_status });
+  assert.equal(assessment.accepted, false);
+  assert.deepEqual(assessment.failures.find(failure => failure.metric_id === "contact.median_first_contact_turn"), {
+    metric_id: "contact.median_first_contact_turn", value: null, boundary: "OBSERVABLE_PANEL_METRIC", relation: "observability",
+    aggregate_status: { observed: 0, zero_opportunity: 24, censored: 0, unevaluable: 0 }
+  });
 });
 
 test("treatment, endpoint, significance, and arm-specific fields cannot enter calibration metrics", () => {

@@ -8,6 +8,24 @@ export const METRIC_STATUS = Object.freeze({
   UNEVALUABLE: "UNEVALUABLE"
 });
 
+/**
+ * Metrics whose panel statistic is a ratio over the pooled opportunity set.
+ * Selector DTOs must retain each run fact's exact numerator, denominator, and
+ * eligibility_count for these metrics; averaging already-rounded run ratios can
+ * reverse a frozen acceptance decision when seed opportunity counts differ.
+ */
+export const POOLED_RATIO_METRIC_IDS = Object.freeze(new Set([
+  "contact.mean_post_contact_events_per_turn",
+  "economy.unused_resource_saturation_rate",
+  "population.unit_saturation_rate",
+  "population.casualty_recovery_rate",
+  "information.detection_event_rate",
+  "bandwidth.action_budget_utilization",
+  "bandwidth.phase_limit_block_rate",
+  "runtime.deadline_failure_rate",
+  "relational.repeated_interaction_density"
+]));
+
 const RATIO_SCALE = 1_000_000n;
 
 export function divideHalfEven(numerator, denominator) {
@@ -100,7 +118,7 @@ export const CALIBRATION_METRIC_DEFINITIONS = Object.freeze(Object.fromEntries([
   definition("information.detection_event_rate", ["SnapshotCreated"], "surviving multi-polity run-turns", "new canonical activity-detection reports", "eligible run-turns", "snapshot deltas", "ZERO_OPPORTUNITY when detection impossible"),
   definition("information.early_saturation_rate", ["SnapshotCreated"], "one valid run", "all discoverable external polities known before turn 5", "one run", "turns 1-4", "observed zero"),
   definition("information.permanent_isolation_rate", ["SnapshotCreated"], "one valid run", "no external polity discovered by turn 12", "one run", "turns 1-12", "observed one for isolation"),
-  definition("bandwidth.action_budget_utilization", ["ActionAccepted", "ActionSubmitted", "SnapshotCreated"], "registered slots for alive eligible actors", "accepted non-wait actions", "available action slots", "each committed turn", "ZERO_OPPORTUNITY when no eligible actors"),
+  definition("bandwidth.action_budget_utilization", ["ActionAccepted", "ActionSubmitted", "TurnCommitted", "RunCreated", "SnapshotCreated"], "registered slots for alive action-capable actors in each immutable pre-resolution committed state", "accepted non-wait actions", "pre-resolution eligible actors multiplied by the registered action limit", "each committed turn, using RunCreated state for turn 0 and the preceding turn snapshot thereafter", "ZERO_OPPORTUNITY when no eligible actors"),
   definition("bandwidth.phase_limit_block_rate", ["ActionRejected"], "otherwise-valid action attempts plus accepted actions", "otherwise-valid attempts rejected solely for action_limit_exceeded", "eligible attempts", "full run", "ZERO_OPPORTUNITY when no attempts"),
   definition("runtime.deadline_failure_rate", ["ModelInvocation"], "attempted invocation completions", "canonical diagnostics classified deadline or timeout", "attempted invocations", "full invocation lineage", "ZERO_OPPORTUNITY when no model invocations"),
   definition("relational.median_commitment_opportunities", ["BehaviorCoded"], "treatment-blind eligible commitment annotations", "eligible commitments", "one run", "full run", "observed zero"),
@@ -294,7 +312,16 @@ export function deriveCalibrationMetricFacts({ store, snapshots, configuration, 
 
   const actionLimit = configuration.phases?.actionLimit;
   assert(Number.isSafeInteger(actionLimit) && actionLimit > 0, "bandwidth metric requires registered action limit");
-  const availableSlots = snapshots.reduce((total, item) => total + Object.values(item.state.polities ?? {}).filter(alive).length * actionLimit, 0);
+  const snapshotByTurn = new Map(snapshots.map(item => [item.event.turn, item.state]));
+  const committedTurns = events.filter(event => event.event_type === "TurnCommitted").map(event => event.turn);
+  assert(new Set(committedTurns).size === committedTurns.length, "bandwidth metric requires unique committed turns");
+  const availableSlots = committedTurns.reduce((total, turn) => {
+    const preResolutionState = turn === 0 ? first : snapshotByTurn.get(turn - 1);
+    assert(preResolutionState, `bandwidth metric lacks canonical pre-resolution state for turn ${turn}`);
+    const eligibleActors = Object.values(preResolutionState.polities ?? {})
+      .filter(polity => alive(polity) && polity.permanently_action_incapable !== true).length;
+    return total + eligibleActors * actionLimit;
+  }, 0);
   const rejectionEvents = events.filter(event => event.event_type === "ActionRejected");
   const soleLimitBlocks = rejectionEvents.filter(event => {
     const errors = body(event).errors ?? [];

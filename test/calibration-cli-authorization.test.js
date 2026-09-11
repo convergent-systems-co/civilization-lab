@@ -20,6 +20,7 @@ import {
 } from "../src/calibration-runner.js";
 import { calibrationProtocol } from "../src/calibration.js";
 import { parameterRegistry } from "../src/parameters.js";
+import { syntheticCanonicalEvidence } from "./helpers/calibration-fixture.js";
 
 const root = resolve(fileURLToPath(import.meta.url), "../..");
 const cli = join(root, "scripts/calibration-cli.js");
@@ -33,12 +34,7 @@ async function temporaryDirectory(prefix) {
   return await mkdtemp(join(tmpdir(), `calibration-cli-${prefix}-`));
 }
 
-/**
- * The smallest attempt the CLI's `verify` verb can bind external trust to: an
- * attested infrastructure failure. The classification keeps the record out of
- * metric regeneration, so this constructs no synthetic world evidence and stays
- * independent of the shared fixture helper.
- */
+/** Construct a complete synthetic-only archive for final-release CLI verification. */
 function syntheticAttempt(calibrationRunId, { seed, attemptId, privateKey }) {
   const registry = parameterRegistry();
   const parameterSet = startingCalibrationParameterSet();
@@ -68,11 +64,11 @@ function syntheticAttempt(calibrationRunId, { seed, attemptId, privateKey }) {
 
 async function fixtureArchive(directory, { privateKey, publicKey }) {
   const keyId = calibrationKeyId(publicKey);
-  const archive = await new CalibrationArchive(directory, { privateKey, publicKey })
-    .initialize({ protocolVersion: protocol.protocol_version, implementationCommit: implementation });
-  const { attempt, evidence, metrics } = syntheticAttempt(archive.state.calibration_run_id,
-    { seed: protocol.seed_panel.seeds[0], attemptId: "calibration-cli-authorization-fixture-attempt", privateKey });
-  const manifest = await archive.recordAttempt(attempt, { evidence, metrics });
+  const attestor = { privateKey, publicKey, keyId, trustScope: "SYNTHETIC_CONFORMANCE" };
+  await new PhaseACalibrationRunner({ directory, mode: "SYNTHETIC_CONFORMANCE", implementationCommit: implementation,
+    executor: async ({ seed, runtimeConfiguration }) => syntheticCanonicalEvidence({ seed, runtimeConfiguration }), attestor }).run({ maximumCandidates: 1 });
+  const archive = await CalibrationArchive.open(directory, attestor);
+  const manifest = await archive.manifest(archive.state.attempts[0].attempt_id);
   return { archive, manifest, keyId };
 }
 
@@ -143,21 +139,24 @@ test("the verify verb binds an archive to externally supplied trust", async () =
   const trusted = generateKeyPairSync("ed25519");
   const foreign = generateKeyPairSync("ed25519");
   const archive = join(directory, "archive");
-  const { keyId } = await fixtureArchive(archive, trusted);
+  const fixture = await fixtureArchive(archive, trusted);
+  const { keyId } = fixture;
   const trustedPath = join(directory, "trusted.pem");
   const foreignPath = join(directory, "foreign.pem");
+  const trustedHeadPath = join(directory, "trusted-head.json");
   await writeFile(trustedPath, publicKeyPem(trusted.publicKey));
   await writeFile(foreignPath, publicKeyPem(foreign.publicKey));
+  await writeFile(trustedHeadPath, canonicalize(fixture.archive.head) + "\n");
 
-  const pass = spawnSync("npm", ["run", "--silent", "calibration:verify", "--", "--archive", archive, "--public-key", trustedPath, "--key-id", keyId], { cwd: root, encoding: "utf8" });
+  const pass = spawnSync("npm", ["run", "--silent", "calibration:verify", "--", "--archive", archive, "--public-key", trustedPath, "--key-id", keyId, "--trusted-head", trustedHeadPath], { cwd: root, encoding: "utf8" });
   assert.equal(pass.status, 0, pass.stderr);
   assert.equal(JSON.parse(pass.stdout).status, "PASS");
 
-  const mismatched = spawnSync(process.execPath, [cli, "verify", "--archive", archive, "--public-key", foreignPath, "--key-id", calibrationKeyId(foreign.publicKey)], { encoding: "utf8" });
+  const mismatched = spawnSync(process.execPath, [cli, "verify", "--archive", archive, "--public-key", foreignPath, "--key-id", calibrationKeyId(foreign.publicKey), "--trusted-head", trustedHeadPath], { encoding: "utf8" });
   assert.notEqual(mismatched.status, 0);
   assert.match(mismatched.stderr, /trust|attestation|key/i);
 
-  const untrustedId = spawnSync(process.execPath, [cli, "verify", "--archive", archive, "--public-key", trustedPath, "--key-id", "some-other-key"], { encoding: "utf8" });
+  const untrustedId = spawnSync(process.execPath, [cli, "verify", "--archive", archive, "--public-key", trustedPath, "--key-id", "some-other-key", "--trusted-head", trustedHeadPath], { encoding: "utf8" });
   assert.notEqual(untrustedId.status, 0);
   assert.match(untrustedId.stderr, /trust|attestation|key/i);
 
@@ -185,7 +184,9 @@ test("the verify verb binds an archive to externally supplied trust", async () =
     for (const entry of state.attempts) if (entry.attempt_id === attemptId) entry.manifest_hash = sha256(foreignSigned);
     return state;
   });
-  const foreignAttestation = spawnSync(process.execPath, [cli, "verify", "--archive", rebound, "--public-key", trustedPath, "--key-id", keyId], { encoding: "utf8" });
+  const reboundHeadPath = join(directory, "rebound-trusted-head.json");
+  await writeFile(reboundHeadPath, canonicalize(reboundArchive.archive.head) + "\n");
+  const foreignAttestation = spawnSync(process.execPath, [cli, "verify", "--archive", rebound, "--public-key", trustedPath, "--key-id", keyId, "--trusted-head", reboundHeadPath], { encoding: "utf8" });
   assert.notEqual(foreignAttestation.status, 0);
   assert.match(foreignAttestation.stderr, /untrusted calibration attestation/);
 });
@@ -262,13 +263,16 @@ test("the deterministic synthetic fixture is software evidence and cannot be pro
   const directory = await temporaryDirectory("promotion");
   const keys = generateKeyPairSync("ed25519");
   const archive = join(directory, "archive");
-  const { manifest, keyId } = await fixtureArchive(archive, keys);
+  const fixture = await fixtureArchive(archive, keys);
+  const { manifest, keyId } = fixture;
   assert.equal(manifest.policy_configuration.kind, "deterministic_synthetic_conformance");
   assert.equal(manifest.model_runtime_configuration.used, false);
 
   const keyPath = join(directory, "trusted.pem");
+  const headPath = join(directory, "trusted-head.json");
   await writeFile(keyPath, publicKeyPem(keys.publicKey));
-  const before = spawnSync(process.execPath, [cli, "verify", "--archive", archive, "--public-key", keyPath, "--key-id", keyId], { encoding: "utf8" });
+  await writeFile(headPath, canonicalize(fixture.archive.head) + "\n");
+  const before = spawnSync(process.execPath, [cli, "verify", "--archive", archive, "--public-key", keyPath, "--key-id", keyId, "--trusted-head", headPath], { encoding: "utf8" });
   assert.equal(before.status, 0, before.stderr);
 
   // Promotion by editing the recorded manifest is refused as tampering.
@@ -277,7 +281,7 @@ test("the deterministic synthetic fixture is software evidence and cannot be pro
   promoted.policy_configuration = { kind: "empirical_execution" };
   promoted.model_runtime_configuration = { used: true, frozen_artifact: baseline.runtime.hugging_face_repository };
   await writeFile(manifestPath, canonicalize(promoted) + "\n");
-  const after = spawnSync(process.execPath, [cli, "verify", "--archive", archive, "--public-key", keyPath, "--key-id", keyId], { encoding: "utf8" });
+  const after = spawnSync(process.execPath, [cli, "verify", "--archive", archive, "--public-key", keyPath, "--key-id", keyId, "--trusted-head", headPath], { encoding: "utf8" });
   assert.notEqual(after.status, 0);
   assert.match(after.stderr, /calibration attestation invalid|manifest index mismatch/);
 
@@ -286,18 +290,20 @@ test("the deterministic synthetic fixture is software evidence and cannot be pro
   // agrees here, so tamper evidence cannot reject it: the refusal has to come from a
   // provenance class that names the software evidence this tooling commit can attest.
   const authentic = join(directory, "authentic-promotion");
-  const { archive: authenticArchive, manifest: authenticManifest } = await fixtureArchive(authentic, keys);
-  const clean = spawnSync(process.execPath, [cli, "verify", "--archive", authentic, "--public-key", keyPath, "--key-id", keyId], { encoding: "utf8" });
-  assert.equal(clean.status, 0, clean.stderr);
+  const authenticArchive = await new CalibrationArchive(authentic, { privateKey: keys.privateKey, publicKey: keys.publicKey })
+    .initialize({ protocolVersion: protocol.protocol_version, implementationCommit: implementation });
+  const authenticManifest = { calibration_run_id: authenticArchive.state.calibration_run_id };
+  const authenticHeadPath = join(directory, "authentic-trusted-head.json");
 
   const record = syntheticAttempt(authenticManifest.calibration_run_id,
-    { seed: protocol.seed_panel.seeds[1], attemptId: "calibration-cli-authorization-promoted-attempt", privateKey: keys.privateKey });
+    { seed: protocol.seed_panel.seeds[0], attemptId: "calibration-cli-authorization-promoted-attempt", privateKey: keys.privateKey });
   record.attempt.policy_configuration = { kind: "empirical_execution" };
   record.attempt.model_runtime_configuration = { used: true, frozen_artifact: baseline.runtime.hugging_face_repository };
   record.attempt.attestation = attestCalibrationAttempt(record.attempt, { privateKey: keys.privateKey });
   await authenticArchive.recordAttempt(record.attempt, { evidence: record.evidence, metrics: record.metrics });
+  await writeFile(authenticHeadPath, canonicalize(authenticArchive.head) + "\n");
 
-  const promotedRun = spawnSync(process.execPath, [cli, "verify", "--archive", authentic, "--public-key", keyPath, "--key-id", keyId], { encoding: "utf8" });
+  const promotedRun = spawnSync(process.execPath, [cli, "verify", "--archive", authentic, "--public-key", keyPath, "--key-id", keyId, "--trusted-head", authenticHeadPath], { encoding: "utf8" });
   assert.notEqual(promotedRun.status, 0);
   assert.match(promotedRun.stderr, /^SoftwareEvidenceProvenanceViolation:/m);
   assert.match(promotedRun.stderr, /software evidence only/);

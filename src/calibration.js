@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { verify } from "node:crypto";
 import { assert, canonicalize, clone, sha256 } from "./core.js";
 import { assertValidSchema } from "./schema.js";
-import { divideHalfEven, decimalToScaled, fixedRatio } from "./calibration-metrics.js";
+import { divideHalfEven, decimalToScaled, fixedRatio, POOLED_RATIO_METRIC_IDS } from "./calibration-metrics.js";
 
 const protocol = JSON.parse(readFileSync(resolve(import.meta.dirname, "../PILOT_0_CALIBRATION_PROTOCOL.spec.json"), "utf8"));
 
@@ -132,6 +132,13 @@ function fixed(value, activeProtocol) {
   return divideHalfEven(numerator * BigInt(activeProtocol.metric_numeric_policy.scale), denominator);
 }
 
+/**
+ * Aggregate either legacy signed-manifest projections or the isolated selector
+ * DTO. Each isolated-selector metric fact must have this closed shape:
+ * `{ status, value, numerator, denominator, eligibility_count }`. Exact decimal
+ * integer strings are mandatory because pooled rates are computed as
+ * `sum(numerator) / sum(denominator)`, never as a mean of per-seed ratios.
+ */
 export function aggregateCalibrationSelectionView(view, activeProtocol = protocol) {
   assert(Array.isArray(view) && view.length === activeProtocol.seed_panel.seeds.length, "complete calibration selection view required");
   assertTreatmentBlind(view, activeProtocol);
@@ -142,6 +149,9 @@ export function aggregateCalibrationSelectionView(view, activeProtocol = protoco
     assert(canonicalize(view.map(row => row.seed).sort()) === canonicalize([...activeProtocol.seed_panel.seeds].sort()), "selection view does not contain each frozen seed exactly once");
     const hashes = new Set(view.map(row => row.parameter_set_hash));
     assert(hashes.size === 1, "selection view mixes parameter sets");
+    // Legacy signed run manifests predate exact metric facts. Keep this public
+    // API compatible; production selector DTOs are the opaque form below and
+    // MUST carry status/value/numerator/denominator/eligibility_count.
     const normalizedView = view.map(row => ({ candidate_alias: row.parameter_set_hash, opaque_seed_alias: row.seed, disposition: row.disposition,
       metrics: Object.fromEntries(Object.entries(row.metrics).map(([id, value]) => [id, { status: "OBSERVED", value }])) }));
     const result = aggregateCalibrationSelectionView(normalizedView, activeProtocol);
@@ -158,11 +168,27 @@ export function aggregateCalibrationSelectionView(view, activeProtocol = protoco
     const facts = view.map(row => row.metrics[metric.metric_id]);
     assert(facts.every(fact => fact && ["OBSERVED", "ZERO_OPPORTUNITY", "CENSORED", "UNEVALUABLE"].includes(fact.status)), `selector metric status invalid: ${metric.metric_id}`);
     const included = conditionalMedians.has(metric.metric_id) ? facts.filter(fact => fact.status === "OBSERVED") : facts;
-    const values = included.map(fact => fixed(fact.value ?? 0, activeProtocol)).sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
     aggregate_status[metric.metric_id] = { observed: facts.filter(fact => fact.status === "OBSERVED").length,
       zero_opportunity: facts.filter(fact => fact.status === "ZERO_OPPORTUNITY").length,
       censored: facts.filter(fact => fact.status === "CENSORED").length,
       unevaluable: facts.filter(fact => fact.status === "UNEVALUABLE").length };
+    if (POOLED_RATIO_METRIC_IDS.has(metric.metric_id) && view.every(row => Object.hasOwn(row, "opaque_run_alias"))) {
+      assert(facts.every(fact => /^-?\d+$/.test(fact.numerator ?? "") && /^\d+$/.test(fact.denominator ?? "") && /^\d+$/.test(fact.eligibility_count ?? "")),
+        `selector pooled metric requires exact counts: ${metric.metric_id}`);
+      const observed = facts.filter(fact => fact.status === "OBSERVED");
+      if (!observed.length) {
+        // A pooled rate with a structurally observed zero opportunity set is
+        // exactly zero, while censoring/unevaluability remains non-observation.
+        aggregate[metric.metric_id] = facts.every(fact => fact.status === "ZERO_OPPORTUNITY") ? 0 : null;
+        continue;
+      }
+      const numerator = observed.reduce((sum, fact) => sum + BigInt(fact.numerator), 0n);
+      const denominator = observed.reduce((sum, fact) => sum + BigInt(fact.denominator), 0n);
+      assert(denominator > 0n, `selector pooled metric requires a positive pooled denominator: ${metric.metric_id}`);
+      aggregate[metric.metric_id] = fixedRatio(numerator, denominator, activeProtocol.metric_numeric_policy.scale);
+      continue;
+    }
+    const values = included.map(fact => fixed(fact.value ?? 0, activeProtocol)).sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
     if (!values.length) { aggregate[metric.metric_id] = null; continue; }
     const reducer = activeProtocol.metric_aggregation_registry[metric.metric_id];
     let result;
@@ -176,7 +202,7 @@ export function aggregateCalibrationSelectionView(view, activeProtocol = protoco
   return { candidate_alias: [...hashes][0], seed_aliases: view.map(row => row.opaque_seed_alias).sort(), aggregate_metrics: aggregate, aggregate_status };
 }
 
-export function assessCalibrationCandidate({ parameter_set_hash, seed_ids, aggregate_metrics, worst_seed_metric_pass_fraction = 0, cross_seed_metric_variance = 0, changes_from_start = 0 }, activeProtocol = protocol) {
+export function assessCalibrationCandidate({ parameter_set_hash, seed_ids, aggregate_metrics, aggregate_status = {}, worst_seed_metric_pass_fraction = 0, cross_seed_metric_variance = 0, changes_from_start = 0 }, activeProtocol = protocol) {
   assertTreatmentBlind({ aggregate_metrics }, activeProtocol);
   assert(/^[0-9a-f]{64}$/.test(parameter_set_hash), "invalid parameter set hash");
   assert(canonicalize([...seed_ids].sort()) === canonicalize([...activeProtocol.seed_panel.seeds].sort()), "candidate did not use the complete frozen seed panel");
@@ -187,6 +213,14 @@ export function assessCalibrationCandidate({ parameter_set_hash, seed_ids, aggre
   for (const metric of activeProtocol.metrics) {
     assert(Object.hasOwn(aggregate_metrics, metric.metric_id), `missing calibration metric: ${metric.metric_id}`);
     const value = aggregate_metrics[metric.metric_id];
+    if (value === null) {
+      const status = aggregate_status[metric.metric_id];
+      assert(status && Number.isSafeInteger(status.observed) && Number.isSafeInteger(status.zero_opportunity) &&
+        Number.isSafeInteger(status.censored) && Number.isSafeInteger(status.unevaluable), `missing calibration aggregate status: ${metric.metric_id}`);
+      failures.push({ metric_id: metric.metric_id, value: null, boundary: "OBSERVABLE_PANEL_METRIC", relation: "observability", aggregate_status: clone(status) });
+      minimumMargin = Math.min(minimumMargin, -1);
+      continue;
+    }
     assert(typeof value === "number" && Number.isFinite(value), `invalid calibration metric value: ${metric.metric_id}`);
     const { minimum, maximum } = metric.acceptance;
     if (minimum !== undefined && value < minimum) failures.push({ metric_id: metric.metric_id, value, boundary: minimum, relation: "minimum" });

@@ -10,7 +10,7 @@
   "quantization": "none",
   "model_artifact_hash": "f300d6172dd4f852e3f1e47d3d33275e0a6c62075dfd5c567ec412f839a22c59",
   "tokenizer_hash": "09f36fad5128ba0d2cf24a8c47373c279766f7981baa23d0862caf4bacb6060b",
-  "runtime_hash": "7ec89ee0098059839540d5d72c8a1acc3779b786f88ee363fb2359a1ff382549",
+  "runtime_hash": "9809093b6e41e14d1d6af512681cbc767119c3f169aa791d6c3f5a5f82fab508",
   "generation": {
     "temperature": 0.7,
     "top_p": 0.9,
@@ -42,7 +42,7 @@
         "mlx": "0.32.2",
         "mlx_lm": "0.31.3"
       },
-      "runner_hash": "67664fdb50c012c6154a45b0e0201b1d16882d0081a97e0f3e8cbd38b8ff9442",
+      "runner_hash": "9c2a019062c7179424d273adc1ed602264bf48f863f3f428a3e45207a56cdc68",
       "dtype": "checkpoint",
       "device": "metal",
       "backend": "mlx",
@@ -90,7 +90,7 @@
       "adapters": [],
       "dynamic_weights": false
     },
-    "runtime_hash": "7ec89ee0098059839540d5d72c8a1acc3779b786f88ee363fb2359a1ff382549",
+    "runtime_hash": "9809093b6e41e14d1d6af512681cbc767119c3f169aa791d6c3f5a5f82fab508",
     "artifacts": {
       "weights": {
         "model.safetensors-00001-of-00004.safetensors": "862bf7bba8a50145d19d0ae463931fae515284024736592a73a336bc4dfa54ee",

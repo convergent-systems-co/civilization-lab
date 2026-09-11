@@ -24,7 +24,10 @@ function fixture(enriched = false) {
     facilities: { f1: { owner_id: "a", type: "barracks" }, f2: { owner_id: "b", type: "barracks" } }
   } }));
   emit("RunCreated", 0, { initial_state_ref: put(structuredClone(snapshots[0].state)) });
-  for (let turn = 0; turn < 20; turn++) emit("TurnResolved", turn);
+  for (let turn = 0; turn < 20; turn++) {
+    emit("TurnCommitted", turn, { turn_committed_id: `commit-${turn}` });
+    emit("TurnResolved", turn);
+  }
   if (enriched) {
     emit("MessageSent", 1, { from: "a", to: "b", relational_category: "exchange", participant_label: "promise", future_evaluable: true }, ["a", "b"]);
     emit("MessageSent", 4, { from: "b", to: "a", relational_category: "retaliation" }, ["b", "a"]);
@@ -145,6 +148,18 @@ test("unrelated recovery, rejected strategic actions and waits do not inflate de
   assert.equal(m["population.casualty_recovery_rate"].value, 0.5);
   assert.equal(m["conflict.dominant_action_share"].denominator, "2");
   assert.equal(m["bandwidth.phase_limit_block_rate"].denominator, "4");
+});
+
+test("action utilization uses pre-resolution actors when an acting polity is eliminated", () => {
+  const f = fixture(true);
+  // RunCreated retains both eligible actors. The turn-0 post-resolution state
+  // eliminates b, so only a is eligible from turn 1 onward.
+  for (const snapshot of f.snapshots) snapshot.state.polities.b.alive = false;
+  const fact = deriveCalibrationMetricFacts(f)["bandwidth.action_budget_utilization"];
+  assert.equal(fact.numerator, "2");
+  assert.equal(fact.denominator, "84"); // turn 0: 2*4; turns 1-19: 1*4
+  assert.equal(fact.value, 0.02381);
+  assert.notEqual(fact.denominator, "80", "post-resolution survivors must not define turn-0 capacity");
 });
 
 test("eight battle turns in final ten qualify, seven do not; short run is censored", () => {

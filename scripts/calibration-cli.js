@@ -66,14 +66,18 @@ try {
       next_action: "A separate empirical authorization and execution adapter are required."
     }, null, 2));
   } else if (command === "verify") {
-    const directory = option("--archive"), publicKeyPath = option("--public-key"), keyId = option("--key-id");
-    if (!directory || !publicKeyPath || !keyId) throw new Error("verify requires --archive, --public-key, and --key-id");
+    const directory = option("--archive"), publicKeyPath = option("--public-key"), keyId = option("--key-id"), trustedHeadPath = option("--trusted-head");
+    if (!directory || !publicKeyPath || !keyId || !trustedHeadPath) throw new Error("verify requires --archive, --public-key, --key-id, and --trusted-head");
     const publicKey = createPublicKey(await readFile(resolve(publicKeyPath), "utf8"));
-    // Trust is supplied entirely by the caller: the archive's state envelopes and its
-    // attestations are both bound to the operator's key, never to a built-in default.
-    const archive = await CalibrationArchive.open(resolve(directory), { publicKey, keyId });
+    const trustedHead = JSON.parse(await readFile(resolve(trustedHeadPath), "utf8"));
+    if (!Number.isSafeInteger(trustedHead?.generation) || !/^[a-f0-9]{64}$/.test(trustedHead?.digest ?? "")) throw new Error("invalid externally retained trusted head");
+    // Trust is supplied entirely by the caller: the archive's state envelopes,
+    // final head and attestations are never authorized by archive-local material.
+    const archive = await CalibrationArchive.open(resolve(directory), { publicKey, keyId, trustedHead });
     await archive.verify({ trustedKeys: { [keyId]: publicKey } });
     await assertSoftwareEvidenceProvenance(archive);
+    if (archive.state.status !== "COMPLETE" || archive.state.result_ref !== "CALIBRATION_RESULT.json")
+      throw new Error("release verification requires a complete calibration result archive");
     console.log(JSON.stringify({ status: "PASS", archive: resolve(directory), protocol_version: protocol.protocol_version }));
 } else if (command === "run") {
   const authorizationPath = option("--authorization"), authorizationPublicKeyPath = option("--authorization-public-key");
