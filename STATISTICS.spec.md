@@ -11,6 +11,16 @@ Primary hierarchy: `study -> condition -> world seed/run -> polity -> turn -> ev
 ## Pilot policy
 Pilot 0 and later pilots are instrument-development/exploratory runs. Use pilots to refine the global objective; lock neutral confidant questions; tune bounded memory capacity; tune phase durations/diplomacy bandwidth; test action comprehension and invalid-action rate; tune map viability/contact timing/resource asymmetry; tune economy/food/research/combat/intelligence constants; estimate runtime/cost and variance; detect leakage, sandbox violations, or observer contamination; identify useful candidate metrics.
 
+World calibration and exploratory Pilot 0 are separate datasets and phases. Phase
+A follows `PILOT_0_CALIBRATION_PROTOCOL.spec.json`: parameter selection uses only
+the frozen treatment-blind viability, mechanics, feasibility, dynamic-range and
+measurement-opportunity metrics on the complete common seed panel. It computes no
+treatment comparisons and exposes no arm labels, endpoint values, effect estimates
+or raw-evidence navigation to the selector. Phase B begins only after one selected
+parameter set is frozen into a new versioned Pilot 0 manifest. No mid-dataset
+retuning is permitted; a world-breaking defect invalidates that Pilot version and
+requires documented recalibration and refreeze.
+
 Pilot outcomes MUST NOT be pooled into confirmatory evidence. Multiple pilots are expected.
 
 ## Pilot 0 player definition

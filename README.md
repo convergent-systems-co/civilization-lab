@@ -150,3 +150,12 @@ README.md            Project orientation and implementation roadmap
 ## Working principles for implementation
 
 Each normative requirement has a home in a schema, reducer/projection, manifest field, or testable acceptance criterion. `npm run check` performs contract validation, the conformance/adversarial suite, and a clean build. Changes that alter semantics must update the relevant specification and version/hash requirements. Confirmatory execution remains rejected unless the complete ruleset, model/runtime, prompts, configuration, analysis plan, and dependency manifest are frozen.
+
+## Pre-Pilot calibration boundary
+
+The treatment-blind preparation procedure is frozen in
+[PILOT_0_CALIBRATION_PROTOCOL.spec.json](PILOT_0_CALIBRATION_PROTOCOL.spec.json)
+and explained in [CALIBRATION_PROTOCOL.md](CALIBRATION_PROTOCOL.md). These files
+prepare calibration but do not authorize it. World-calibration values remain
+`PROVISIONAL` until Phase A has been separately authorized, executed, accepted,
+and frozen into a new versioned Pilot 0 manifest.

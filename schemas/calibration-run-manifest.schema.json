@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/calibration-run-manifest.schema.json",
+  "title": "Pilot 0 calibration attempt manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "protocol_version", "attempt_id", "implementation_commit", "implementation_tag", "specification_refs", "parameter_registry_version", "parameter_set_hash", "parameter_set", "seed", "rng_provenance_ref", "policy_configuration", "model_runtime_configuration", "canonical_evidence_ref", "metrics", "disposition", "adjustment_reason", "treatment_blinding", "blinding_attestation", "created_at"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "protocol_version": {"type": "string"},
+    "attempt_id": {"type": "string"},
+    "implementation_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "implementation_tag": {"const": "v0.1.0-pilot0"},
+    "specification_refs": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "parameter_registry_version": {"type": "string"},
+    "parameter_set_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "parameter_set": {"type": "object"},
+    "seed": {"type": "string"},
+    "rng_provenance_ref": {"type": "string"},
+    "policy_configuration": {"type": "object"},
+    "model_runtime_configuration": {"type": "object"},
+    "canonical_evidence_ref": {"type": "string"},
+    "metrics": {"type": "object", "additionalProperties": {"type": "number"}},
+    "disposition": {"enum": ["ACCEPTED", "REJECTED", "FAILED", "PROTOCOL_INCIDENT"]},
+    "adjustment_reason": {"type": "string"},
+    "treatment_blinding": {"const": "CALIBRATION_TREATMENT_BLIND_V1"},
+    "blinding_attestation": {"type": "object", "additionalProperties": false, "required": ["version", "attestor_key_id", "algorithm", "signature"], "properties": {"version": {"const": "1.0.0"}, "attestor_key_id": {"type": "string"}, "algorithm": {"const": "Ed25519"}, "signature": {"type": "string", "minLength": 1}}},
+    "created_at": {"type": "string"}
+  }
+}

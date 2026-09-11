@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "review_version": "pilot-0-calibration-review-1.0.0",
+  "protocol_version": "pilot-0-calibration-1.0.0",
+  "scope": "PRE_EXECUTION_PROTOCOL_ONLY_NO_EMPIRICAL_RUNS",
+  "method": "Independent adversarial role passes followed by cross-domain synthesis; role names do not claim different models or human reviewers.",
+  "specialist_reviews": [
+    {"specialist":"treatment_leakage","attacks":["raw treatment fields","condition metadata","direct archive access","innocent-key metric smuggling","attestation forgery"],"status":"PASS_AFTER_FIXES"},
+    {"specialist":"researcher_degrees_of_freedom","attacks":["manual candidate injection","undeclared ranges","metric deletion","post-hoc thresholds","unbounded search"],"status":"PASS_AFTER_FIXES"},
+    {"specialist":"endpoint_leakage","attacks":["primary endpoint values","arm-specific component summaries","effect direction","significance outputs","normative optimization"],"status":"PASS"},
+    {"specialist":"theory_driven_parameter_selection","attacks":["cooperation advantage","commitment advantage","repair advantage","reciprocity advantage","theoretically attractive tie breaking"],"status":"PASS"},
+    {"specialist":"seed_integrity","attacks":["seed omission","duplicate seed","candidate-specific seed panel","seed cherry-picking","mixed parameter sets"],"status":"PASS"},
+    {"specialist":"stopping_rule","attacks":["interesting-result stopping","partial-metric acceptance","ambiguous tie break","manual extension after failure"],"status":"PASS_AFTER_FIXES"},
+    {"specialist":"hidden_manual_tuning","attacks":["out-of-grid value","silent incumbent replacement","unrecorded failed attempt","parameter alias divergence"],"status":"PASS_AFTER_FIXES"},
+    {"specialist":"calibration_analysis_contamination","attacks":["raw evidence link in selector","treatment comparison display","mid-dataset retuning","calibration output promoted to confirmatory evidence"],"status":"PASS_AFTER_FIXES"}
+  ],
+  "findings": [
+    {"id":"CAL-P1-001","severity":"P1","problem":"Selector projection exposed a canonical evidence reference that could be followed into treatment-bearing raw evidence.","resolution":"Removed evidence references from the selector view; the independent attestation binds the hidden archive reference.","status":"CLOSED_TESTED"},
+    {"id":"CAL-P1-002","severity":"P1","problem":"Metric aggregation was prose-only and could permit analyst-selected reducers or ordering.","resolution":"Added an exact metric-to-reducer registry and deterministic fixed-point complete-panel aggregation.","status":"CLOSED_TESTED"},
+    {"id":"CAL-P1-003","severity":"P1","problem":"The treatment-blinding marker was self-asserted.","resolution":"Require an independently trusted Ed25519 attestation over the exact selector input binding; mutation and forgery fail closed.","status":"CLOSED_TESTED"},
+    {"id":"CAL-P1-004","severity":"P1","problem":"Candidate generation language left hidden manual search freedom and an undersized truncation bound.","resolution":"Frozen deterministic operation order, one-operation candidate rule, explicit 512-attempt/12-round limits, and machine-generated operation plans.","status":"CLOSED_TESTED"}
+  ],
+  "remaining_p0": [],
+  "remaining_p1": [],
+  "verdict": "PASS",
+  "empirical_calibration_authorized": false,
+  "pilot_0_research_authorized": false,
+  "confirmatory_execution_authorized": false
+}

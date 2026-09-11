@@ -153,6 +153,25 @@ adversarial acceptance. Synthetic arithmetic runtime checks remain non-empirical
 - Reject Pilot 0 battle configurations that require active logistics/supply mechanics; use an explicit canonical disabled-supply state reference instead.
 - Validate `HORIZON_POLICY.spec.json`: Pilot 0 maximum is exactly 20; confirmatory status is `DEFERRED_BY_DESIGN — PILOT_0_CALIBRATION`; the selected post-pilot horizon is single-valued across conditions; and no prohibited outcome-directed inputs enter selection.
 
+## Pre-Pilot calibration protocol gate
+
+Before empirical world calibration, validate
+`PILOT_0_CALIBRATION_PROTOCOL.spec.json` and both calibration schemas. Every
+`WORLD_CALIBRATION` registry entry must have a bounded declared domain or an
+explicit held-constant disposition while remaining `PROVISIONAL`. The complete
+common seed panel, metric set, fixed-point numeric policy, aggregation reducers,
+candidate-operation order, attempt/round ceilings, acceptance boundaries,
+stopping rule, and treatment-neutral tie breakers are immutable within a protocol
+version.
+
+The calibration selector must fail closed on incomplete/duplicate seeds, mixed
+parameter sets, undeclared or extra metrics, arm-specific fields, endpoint/effect
+outputs, direct raw-evidence access, forged or missing independent blinding
+attestation, out-of-grid values, silent attempt loss, manual tuning, or any attempt
+to authorize empirical execution. Every disclosure is a retained protocol incident
+and invalidates the affected selection decision. Calibration-only tests are
+synthetic conformance evidence, never empirical calibration.
+
 ## Test artifact requirements
 
 Each validation result must record:

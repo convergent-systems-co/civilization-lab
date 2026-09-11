@@ -5,6 +5,7 @@ import { EVENT_TYPES, sha256 } from "../src/core.js";
 import { PILOT_0_CONFIG } from "../src/world.js";
 import { assertValidSchema, assertSupportedSchema } from "../src/schema.js";
 import { validateEndpointContract } from "../src/analysis.js";
+import { validateCalibrationProtocol } from "../src/calibration.js";
 
 const root = resolve(import.meta.dirname, "..");
 const schemasDir = resolve(root, "schemas");
@@ -23,6 +24,7 @@ const projection = await json(resolve(root, "PROJECTION_POLICY.spec.json"));
 const horizon = await json(resolve(root, "HORIZON_POLICY.spec.json"));
 const breach = await json(resolve(root, "BREACH_POLICY.spec.json"));
 const model = await json(resolve(root, "config/pilot0-model.json"));
+const calibration = await json(resolve(root, "PILOT_0_CALIBRATION_PROTOCOL.spec.json"));
 assertValidSchema(model, "hf-model-config.schema.json");
 check(model.context_budget > model.generation.max_tokens, "model output budget exhausts context");
 check(model.runtime !== "mlx-lm" || (model.dtype === "checkpoint" && model.device === "metal"), "MLX loading configuration mismatch");
@@ -36,6 +38,8 @@ if (model.artifact_manifest) {
   check(lock.generation_performed === false, "artifact inspection must not masquerade as inference validation");
 }
 assertValidSchema(parameters, "parameter-registry.schema.json");
+assertValidSchema(calibration, "calibration-protocol.schema.json");
+validateCalibrationProtocol(calibration, parameters);
 
 check(catalogue.unknown_event_policy === "fail_closed", "event catalogue must fail closed");
 check(catalogue.entries.length === EVENT_TYPES.size, "event catalogue is incomplete");
@@ -55,5 +59,7 @@ check(horizon.shared_across_conditions === true, "confirmatory horizon is not sh
 check(PILOT_0_CONFIG.organizations.enabled === false && PILOT_0_CONFIG.supply.enabled === false, "Pilot 0 disabled-feature boundary violated");
 check(breach.exploratory_only === true && breach.experimental_validity.confirmatory_eligible === false, "breach policy incorrectly permits confirmation");
 for (const key of ["map", "economy", "population", "combat", "memory", "phases"]) check(PILOT_0_CONFIG[key] && Object.values(PILOT_0_CONFIG[key]).every((v) => v !== null && v !== undefined), `Pilot 0 config has missing ${key} defaults`);
+check(calibration.status === "FROZEN_BEFORE_EMPIRICAL_CALIBRATION", "calibration protocol is not frozen before execution");
+check(calibration.authorization.empirical_calibration === false, "calibration protocol improperly authorizes execution");
 
-if (failures.length) { console.error(failures.map((x) => `FAIL ${x}`).join("\n")); process.exitCode = 1; } else console.log(`validated ${schemas.size} schemas, ${catalogue.entries.length} catalogue entries, Pilot 0 contract`);
+if (failures.length) { console.error(failures.map((x) => `FAIL ${x}`).join("\n")); process.exitCode = 1; } else console.log(`validated ${schemas.size} schemas, ${catalogue.entries.length} catalogue entries, Pilot 0 and calibration contracts`);
