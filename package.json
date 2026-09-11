@@ -8,6 +8,8 @@
     "build": "node scripts/build.js",
     "validate": "node scripts/validate-contracts.js",
     "validate:calibration": "node --test --test-concurrency=1 test/calibration-protocol.test.js",
+    "calibration:plan": "node scripts/calibration-cli.js plan",
+    "calibration:verify": "node scripts/calibration-cli.js verify",
     "test": "node --test --test-concurrency=4",
     "check": "npm run validate && npm test && npm run build"
   },

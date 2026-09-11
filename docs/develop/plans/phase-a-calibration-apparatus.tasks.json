@@ -1,0 +1,113 @@
+{
+  "bundle": "phase-a-calibration-apparatus",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Extract shared deterministic calibration test fixture helper",
+      "depends_on": [],
+      "kind": "code",
+      "files": ["test/helpers/calibration-fixture.js", "test/calibration-tooling.test.js"]
+    },
+    {
+      "id": "T2",
+      "title": "Verify baseline/protocol binding, tooling version, and frozen-spec read-only invariant",
+      "depends_on": ["T1"],
+      "kind": "code",
+      "files": ["scripts/validate-contracts.js", "test/calibration-binding.test.js"]
+    },
+    {
+      "id": "T3",
+      "title": "Verify bounded deterministic search, hard bounds, and parameter-registry integrity",
+      "depends_on": ["T1"],
+      "kind": "code",
+      "files": ["test/calibration-search-integrity.test.js"]
+    },
+    {
+      "id": "T4",
+      "title": "Verify 24-seed panel completeness, full retention, and 20-turn horizon cap",
+      "depends_on": ["T1"],
+      "kind": "code",
+      "files": ["test/calibration-panel-retention.test.js"]
+    },
+    {
+      "id": "T5",
+      "title": "Verify 32-metric inventory, reducers, and fixed-point aggregation arithmetic",
+      "depends_on": ["T1"],
+      "kind": "code",
+      "files": ["test/calibration-metric-arithmetic.test.js", "schemas/calibration-metric-artifact.schema.json"]
+    },
+    {
+      "id": "T6",
+      "title": "Verify treatment-blind selector boundary, forbidden-key scan, and incident handling",
+      "depends_on": ["T1"],
+      "kind": "code",
+      "files": ["test/calibration-blinding.test.js"]
+    },
+    {
+      "id": "T7",
+      "title": "Verify Ed25519 attestation subject, external trust, and distinct failure classes",
+      "depends_on": ["T1"],
+      "kind": "code",
+      "files": ["test/calibration-attestation-trust.test.js", "schemas/calibration-attestation.schema.json"]
+    },
+    {
+      "id": "T8",
+      "title": "Verify content-addressed archive immutability, write-once manifests, and crash recovery",
+      "depends_on": ["T1"],
+      "kind": "code",
+      "files": [
+        "test/calibration-archive-recovery.test.js",
+        "schemas/calibration-execution-manifest.schema.json",
+        "schemas/calibration-search-state.schema.json"
+      ]
+    },
+    {
+      "id": "T9",
+      "title": "Verify selection rule, tie-breakers, stopping proof, and output schema closure",
+      "depends_on": ["T1"],
+      "kind": "code",
+      "files": [
+        "test/calibration-outputs.test.js",
+        "schemas/calibration-result.schema.json",
+        "schemas/pilot0-world-configuration.schema.json"
+      ]
+    },
+    {
+      "id": "T10",
+      "title": "Verify authorization boundary, CLI surface, injected adapter, and build packaging",
+      "depends_on": [],
+      "kind": "code",
+      "files": [
+        "scripts/calibration-cli.js",
+        "scripts/build.js",
+        "package.json",
+        "test/calibration-cli-authorization.test.js"
+      ]
+    },
+    {
+      "id": "T11",
+      "title": "Verify generated-artifact hygiene and calibration/runs git-ignore boundary",
+      "depends_on": ["T1"],
+      "kind": "code",
+      "files": [".gitignore", "test/calibration-artifact-hygiene.test.js"]
+    },
+    {
+      "id": "T12",
+      "title": "Close confirmed runner defects and land withheld TODO(T12) assertions",
+      "depends_on": ["T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11"],
+      "kind": "code",
+      "files": ["src/calibration-runner.js", "test/calibration-remediation.test.js"]
+    },
+    {
+      "id": "T13",
+      "title": "Reconcile documentation, headline test counts, and adversarial review record",
+      "depends_on": ["T12"],
+      "kind": "docs",
+      "files": [
+        "README.md",
+        "docs/PHASE_A_CALIBRATION_TOOLING.md",
+        "validation/CALIBRATION_TOOLING_REVIEW.json"
+      ]
+    }
+  ]
+}

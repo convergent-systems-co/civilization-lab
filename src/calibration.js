@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { verify } from "node:crypto";
 import { assert, canonicalize, clone, sha256 } from "./core.js";
 import { assertValidSchema } from "./schema.js";
+import { divideHalfEven } from "./calibration-metrics.js";
 
 const protocol = JSON.parse(readFileSync(resolve(import.meta.dirname, "../PILOT_0_CALIBRATION_PROTOCOL.spec.json"), "utf8"));
 
@@ -123,41 +124,44 @@ export function createCalibrationSelectionView(manifests, { activeProtocol = pro
 }
 
 function fixed(value, activeProtocol) {
-  const scale = activeProtocol.metric_numeric_policy.scale;
-  const scaled = value * scale;
-  const rounded = Math.round(scaled);
-  assert(Number.isSafeInteger(rounded) && Math.abs(scaled - rounded) < 1e-6, "calibration metric exceeds fixed-point precision");
-  return rounded;
-}
-
-function divideHalfEven(numerator, denominator) {
-  assert(Number.isSafeInteger(numerator) && Number.isSafeInteger(denominator) && denominator > 0, "unsafe calibration aggregate");
-  const sign = numerator < 0 ? -1 : 1, absolute = Math.abs(numerator);
-  let quotient = Math.floor(absolute / denominator);
-  const remainder = absolute % denominator;
-  if (remainder * 2 > denominator || (remainder * 2 === denominator && quotient % 2 === 1)) quotient += 1;
-  return sign * quotient;
+  assert(typeof value === "number" && Number.isFinite(value), "invalid calibration metric value");
+  const text = String(value); assert(!/[eE]/.test(text), "exponential calibration metric forbidden");
+  const negative = text.startsWith("-"), [whole, fraction = ""] = (negative ? text.slice(1) : text).split(".");
+  const denominator = 10n ** BigInt(fraction.length);
+  const numerator = BigInt((whole || "0") + fraction) * (negative ? -1n : 1n);
+  return divideHalfEven(numerator * BigInt(activeProtocol.metric_numeric_policy.scale), denominator);
 }
 
 export function aggregateCalibrationSelectionView(view, activeProtocol = protocol) {
   assert(Array.isArray(view) && view.length === activeProtocol.seed_panel.seeds.length, "complete calibration selection view required");
   assertTreatmentBlind(view, activeProtocol);
-  const hashes = new Set(view.map(row => row.parameter_set_hash));
+  const hashes = new Set(view.map(row => row.candidate_alias));
   assert(hashes.size === 1, "selection view mixes parameter sets");
-  assert(canonicalize(view.map(row => row.seed).sort()) === canonicalize([...activeProtocol.seed_panel.seeds].sort()), "selection view does not contain each frozen seed exactly once");
+  assert(new Set(view.map(row => row.opaque_seed_alias)).size === activeProtocol.seed_panel.seeds.length, "selection view does not contain each frozen seed exactly once");
   assert(view.every(row => row.disposition !== "PROTOCOL_INCIDENT"), "protocol incident invalidates candidate aggregation");
   const aggregate = {};
+  const aggregate_status = {};
+  const conditionalMedians = new Set(["contact.median_first_contact_turn", "technology.median_first_completion_turn", "information.median_discovery_turn"]);
   for (const metric of activeProtocol.metrics) {
-    const values = view.map(row => fixed(row.metrics[metric.metric_id], activeProtocol)).sort((a, b) => a - b);
+    const facts = view.map(row => row.metrics[metric.metric_id]);
+    assert(facts.every(fact => fact && ["OBSERVED", "ZERO_OPPORTUNITY", "CENSORED", "UNEVALUABLE"].includes(fact.status)), `selector metric status invalid: ${metric.metric_id}`);
+    const included = conditionalMedians.has(metric.metric_id) ? facts.filter(fact => fact.status === "OBSERVED") : facts;
+    const values = included.map(fact => fixed(fact.value ?? 0, activeProtocol)).sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+    aggregate_status[metric.metric_id] = { observed: facts.filter(fact => fact.status === "OBSERVED").length,
+      zero_opportunity: facts.filter(fact => fact.status === "ZERO_OPPORTUNITY").length,
+      censored: facts.filter(fact => fact.status === "CENSORED").length,
+      unevaluable: facts.filter(fact => fact.status === "UNEVALUABLE").length };
+    if (!values.length) { aggregate[metric.metric_id] = null; continue; }
     const reducer = activeProtocol.metric_aggregation_registry[metric.metric_id];
     let result;
     if (reducer === "MAXIMUM") result = values.at(-1);
-    else if (reducer === "MEDIAN") result = values.length % 2 ? values[(values.length - 1) / 2] : divideHalfEven(values[values.length / 2 - 1] + values[values.length / 2], 2);
-    else if (reducer === "MEAN") result = divideHalfEven(values.reduce((sum, value) => { const next = sum + value; assert(Number.isSafeInteger(next), "calibration metric aggregate overflow"); return next; }, 0), values.length);
+    else if (reducer === "MEDIAN") result = values.length % 2 ? values[(values.length - 1) / 2] : divideHalfEven(values[values.length / 2 - 1] + values[values.length / 2], 2n);
+    else if (reducer === "MEAN") result = divideHalfEven(values.reduce((sum, value) => sum + value, 0n), BigInt(values.length));
     else assert(false, `unknown calibration reducer: ${reducer}`);
-    aggregate[metric.metric_id] = result / activeProtocol.metric_numeric_policy.scale;
+    const numeric = Number(result) / activeProtocol.metric_numeric_policy.scale;
+    assert(Number.isFinite(numeric), "calibration aggregate overflow"); aggregate[metric.metric_id] = numeric;
   }
-  return { parameter_set_hash: [...hashes][0], seed_ids: view.map(row => row.seed).sort(), aggregate_metrics: aggregate };
+  return { candidate_alias: [...hashes][0], seed_aliases: view.map(row => row.opaque_seed_alias).sort(), aggregate_metrics: aggregate, aggregate_status };
 }
 
 export function assessCalibrationCandidate({ parameter_set_hash, seed_ids, aggregate_metrics, worst_seed_metric_pass_fraction = 0, cross_seed_metric_variance = 0, changes_from_start = 0 }, activeProtocol = protocol) {
