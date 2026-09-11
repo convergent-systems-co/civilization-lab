@@ -5,7 +5,34 @@ Branch: `develop/phase-a-calibration-apparatus`
 Base: `origin/main`
 Enhanced: 2026-09-10 (spec-enhancer, pre-planning)
 
+Completion addendum — 2026-09-11: implementation and non-empirical post-policy
+validation are complete at 848/848 tests with zero failures and zero skips. The
+historical bundle-state excerpt below remains unchanged as provenance and is superseded
+for current status by `validation/CALIBRATION_TOOLING_REVIEW.json`.
+
 ---
+
+## Superseding execution-policy addendum — 2026-09-11
+
+This enhanced bundle document is non-authoritative planning material. Its original
+criteria and observed 586-test checkpoint are retained below as history. The worktree
+later passed 823/823 non-empirical tests before the Phase A execution-policy decision;
+that is a **pre-policy baseline**, not final apparatus acceptance.
+
+The human-ratified Phase A execution-policy ensemble supersedes historical criteria 25
+and 26 only where they prohibited a production adapter. The completed bundle must now
+include a versioned fixed heterogeneous deterministic policy package with eight roles
+(expansion/exploration, economic development, technology development, defensive/security,
+competitive/aggressive, cooperative/exchange, opportunistic/mixed, and
+conservative/low-activity), a frozen balanced assignment algorithm, and a production
+Phase A adapter. The package is identical across parameter vectors, seeds, and iterations;
+uses only participant-equivalent authorized projections; and does not invoke Qwen.
+
+The adapter remains fail-closed behind the existing signed authorization and trust
+boundaries. Its existence is not empirical authorization. Final acceptance additionally
+requires synthetic mechanics-coverage validation, manifest/attestation and resume binding
+to the exact policy-package version, a full zero-failure/zero-skip suite, adversarial
+review, and remote preservation.
 
 ## Original content
 
@@ -31,6 +58,9 @@ verbatim record the bundle was formed from is:
 }
 ```
 
+The `pending` value above is quoted historical scanner state; it is not the current
+apparatus status.
+
 ```json
 {"type": "SCAN_DONE", "detail": {"source": "human-authorized Phase A calibration tooling implementation", "issues": []}}
 ```
@@ -39,7 +69,7 @@ The substantive requirements therefore live in the repository, not in the bundle
 The authoritative sources, in precedence order:
 
 1. `PILOT_0_CALIBRATION_PROTOCOL.spec.json` — machine contract, `protocol_id`
-   `pilot-0-calibration`, version `pilot-0-calibration-1.0.0`, status
+   `pilot-0-calibration`, version `pilot-0-calibration-1.1.0`, status
    `FROZEN_BEFORE_EMPIRICAL_CALIBRATION`.
 2. `CALIBRATION_PROTOCOL.md` — the human-readable statement of the same freeze.
 3. `IMPLEMENTATION_BLOCKERS.md` — the record that no P0/P1 research-semantic blocker
@@ -79,7 +109,7 @@ the rest were already concrete in the sources.
 **Binding and versioning**
 
 1. The runner binds implementation commit `8f06baae4cda7d6fbd9d61924b5c615f4a45ba59` and
-   tag `v0.1.0-pilot0`, and protocol version `pilot-0-calibration-1.0.0`. A mismatch in
+   tag `v0.1.0-pilot0`, and protocol version `pilot-0-calibration-1.1.0`. A mismatch in
    either binding fails closed rather than proceeding. *(clarified: named the exact commit,
    tag, and version strings)*
 2. `CALIBRATION_TOOLING_VERSION` is `phase-a-calibration-tooling-1.0.0` and is asserted by
@@ -167,7 +197,8 @@ the rest were already concrete in the sources.
 22. A `CALIBRATION_RESULT` is emitted only when the stopping rule passes with an accepted
     candidate on the complete panel; a stopping proof cannot be emitted otherwise. The
     document validates against `schemas/calibration-result.schema.json`, whose
-    `empirical_authorization` and `confirmatory_authorization` are `false` by construction.
+    `calibration_execution_authorized` identifies only separately authorized Phase A
+    execution; `pilot0_research_authorized` and `confirmatory_authorized` are `false` by construction.
 23. The proposed world configuration validates against
     `schemas/pilot0-world-configuration.schema.json` with status constant
     `PROPOSED_NOT_RESEARCH_AUTHORIZED`. It does not promote any `PROVISIONAL` value.
@@ -176,28 +207,27 @@ the rest were already concrete in the sources.
 
 **Authorization**
 
-25. `node scripts/calibration-cli.js run` fails closed with no empirical execution path
-    present. `npm run calibration:plan` prints the frozen search and authorization state and
-    starts no world or model execution. `npm run calibration:verify -- --archive PATH
-    --public-key PATH --key-id ID` verifies an archive against externally supplied trust.
-26. The execution adapter is injected by the caller. The repository contains no default
-    adapter, no embedded authorization bypass, and no code path that starts world runs, model
-    generation, human sessions, or confirmatory execution.
+25. **Historical pre-policy criterion, superseded in part.** The planning and verification
+    commands remain non-executing. The `run` command must fail closed unless all signed
+    Phase A authorization and trust gates pass; a separately authorized production path is
+    now required.
+26. **Historical pre-policy criterion, superseded.** A production Phase A adapter is now
+    required and must run only the frozen deterministic policy package. It must not invoke
+    model generation, human sessions, Pilot 0 research, or confirmatory execution.
 27. The deterministic synthetic fixture used by tests is software evidence only and cannot be
     promoted into an empirical archive.
 
 **Repository integration**
 
 28. `npm run check` (validate → test → build) passes with zero failures and zero skips.
-    *(clarified: the observed baseline for this tree is 586 tests passing; the criterion is
-    zero failures, and the count must match whatever the tree actually produces)*
+    The later verified pre-policy baseline is 823/823; the final post-policy count must be
+    recorded separately after the policy package and adapter are complete.
 29. Generated calibration records are written under `calibration/runs/`, which stays
     git-ignored; no generated run artifact is committed as repository source.
 30. `README.md` and `docs/PHASE_A_CALIBRATION_TOOLING.md` describe the shipped commands and
-    state, and the headline test count in `README.md` matches the current full-suite result
-    and `validation/CALIBRATION_TOOLING_REVIEW.json`. **Known inconsistency to fix:**
-    `README.md` still states "557 passed" while the tree produces 586 and the review record
-    records 586. *(clarified)*
+    state. The immutable Pilot 0 baseline remains identified as 557 tests; the Phase A
+    review identifies 823/823 as its pre-policy baseline until a distinct post-policy
+    result is available.
 31. `validation/CALIBRATION_TOOLING_REVIEW.json` records the adversarial synthesis — five
     specialist domains (treatment leakage, search integrity, provenance and attestation,
     recovery, research validity), the test totals, and empty P0/P1 finding lists — and its
@@ -221,8 +251,8 @@ the rest were already concrete in the sources.
 - **Extending the search bounds** (512 parameter sets, 12 rounds) or the 24-seed panel.
 - **UI work** under `ui/`, and any change to the existing world/analysis engine beyond what
   the calibration apparatus imports.
-- **Merging to `main`.** The run's merge policy is `never`; this bundle ends at a pull
-  request.
+- **Historical merge policy.** The original automation run ended at a pull request. The
+  current human authorization permits merge only after required validation passes.
 
 ---
 

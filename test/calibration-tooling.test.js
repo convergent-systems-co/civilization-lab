@@ -17,6 +17,7 @@ import {
   calibrationSelectionProjection,
   collectCalibrationObservations,
   materializeCalibrationMetrics,
+  runCalibrationSelectorSandbox,
   assertCalibrationTransition,
   startingCalibrationParameterSet,
   validateCalibrationParameterSet,
@@ -100,11 +101,22 @@ test("synthetic runner evaluates every seed, writes manifests, and is crash-resu
   let calls = 0;
   const runner = new PhaseACalibrationRunner({
     directory, mode: "SYNTHETIC_CONFORMANCE", implementationCommit: implementation,
-    executor: async ({ seed, runtimeConfiguration }) => { calls++; return syntheticCanonicalEvidence({ seed, runtimeConfiguration }); }
+    executor: async request => {
+      calls++;
+      assert.equal(Object.hasOwn(request, "protocol"), false);
+      assert.equal(Object.hasOwn(request, "metrics"), false);
+      assert.equal(Object.hasOwn(request, "stoppingRule"), false);
+      assert.deepEqual(Object.keys(request).sort(), ["adapterContractHash", "adapterPackageHash", "attemptId", "calibrationRunId", "idempotencyKey", "maxTurns", "mode", "modelRuntimeLock", "neutralPolicyManifest", "objectiveTerminalPredicates", "parameterSet", "policyBinding", "runtimeConfiguration", "schema_version", "seed"].sort());
+      return syntheticCanonicalEvidence({ seed: request.seed, runtimeConfiguration: request.runtimeConfiguration });
+    }
   });
   const result = await runner.run({ maximumCandidates: 1 });
   assert.equal(result.attempted_parameter_vectors, 1);
   assert.equal(result.evaluated_seeds.length, 24);
+  assert.equal(result.calibration_execution_authorized, false);
+  assert.equal(result.pilot0_research_authorized, false);
+  assert.equal(result.confirmatory_authorized, false);
+  assert.equal(Object.hasOwn(result, "empirical_authorization"), false);
   assert.equal(calls, 24);
   assert.equal(result.stopping_rule_satisfied, true);
   const resumed = new PhaseACalibrationRunner({ directory, mode: "SYNTHETIC_CONFORMANCE", implementationCommit: implementation,
@@ -156,12 +168,33 @@ test("selector capability rejects treatment fields and exposes no evidence-loade
   assert.throws(() => calibrationSelectionProjection(rows.map((row, index) => index ? row : { ...row, treatment_arm: "x" }), "a".repeat(64), aliases), /unauthorized field/);
 });
 
+test("selector process has OS-enforced filesystem, network, child-process and write denial", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "civilization-selector-probe-"));
+  const secret = join(directory, "forbidden-evidence.json"), probe = join(directory, "probe.mjs");
+  await writeFile(secret, "treatment-arm-secret\n");
+  await writeFile(probe, `import { readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+const denied = {};
+try { readFileSync(${JSON.stringify(secret)}); denied.read = false; } catch { denied.read = true; }
+try { writeFileSync(${JSON.stringify(join(directory, "write"))}, "x"); denied.write = false; } catch { denied.write = true; }
+try { spawnSync(process.execPath, ["--version"]); denied.child = false; } catch { denied.child = true; }
+denied.network = process.permission.has("net") === false;
+process.stdout.write(JSON.stringify(denied));
+`);
+  const child = runCalibrationSelectorSandbox(probe, "");
+  assert.equal(child.status, 0, child.stderr);
+  assert.deepEqual(JSON.parse(child.stdout), { read: true, write: true, child: true, network: true });
+});
+
 test("parameter registry rejects unknown, held, out-of-domain, and manual substitutions", () => {
   const starting = startingCalibrationParameterSet();
   assert.equal(validateCalibrationParameterSet(starting), true);
   assert.throws(() => validateCalibrationParameterSet({ ...starting, invented: 1 }), /unauthorized or missing/);
   assert.throws(() => validateCalibrationParameterSet({ ...starting, "pilot_0.max_turns": 19 }), /held calibration parameter/);
   assert.throws(() => validateCalibrationParameterSet({ ...starting, "world.economy.consumption": 9 }), /out-of-domain/);
+  const hiddenMemoryMutation = structuredClone(starting);
+  hiddenMemoryMutation["world.configuration.memory"].retrieval = "operator_chosen_strategy";
+  assert.throws(() => validateCalibrationParameterSet(hiddenMemoryMutation), /fixed calibration field|unselected calibration field/);
   assert.throws(() => assertCalibrationTransition(starting, { ...starting, "world.economy.consumption": 2 }, { operation: "BASELINE", domain_id: null, selector: null, value: null }), /manual calibration parameter substitution/);
   assert.throws(() => assertCalibrationTransition(starting, starting, { operation: "BASELINE", domain_id: null, selector: null, value: "invented" }), /exact frozen operation/);
 });
@@ -224,6 +257,18 @@ test("implementation failures are retained distinctly from parameter failures", 
   assert.equal(retries, 0, "terminal failed seed must never be re-executed under the same attempt identity");
 });
 
+test("treatment disclosure is retained as a signed blinding incident", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "civilization-blinding-incident-"));
+  const runner = new PhaseACalibrationRunner({ directory, mode: "SYNTHETIC_CONFORMANCE", implementationCommit: implementation,
+    executor: async ({ seed, runtimeConfiguration }) => syntheticCanonicalEvidence({ seed, runtimeConfiguration, treatmentLeak: true }) });
+  await assert.rejects(() => runner.run({ maximumCandidates: 1 }), /calibration blinding/);
+  const archive = await CalibrationArchive.open(directory);
+  assert.equal(archive.state.status, "FAILED");
+  assert.equal(archive.state.attempts[0].status, CALIBRATION_FAILURES.BLINDING_BREACH);
+  assert.equal(archive.state.incidents.length, 1);
+  assert.equal(archive.state.incidents[0].disposition, "SELECTION_INVALID_REPEAT_FROM_LAST_UNEXPOSED_STATE");
+});
+
 test("signed state generations enforce cross-process lock and expected-head CAS", async () => {
   const directory = await mkdtemp(join(tmpdir(), "civilization-calibration-cas-"));
   const first = await new CalibrationArchive(directory).initialize({ protocolVersion: protocol.protocol_version, implementationCommit: implementation });
@@ -257,6 +302,13 @@ test("trusted head detects rollback and startup rejects orphan artifacts", async
   await new CalibrationArchive(clean).initialize({ protocolVersion: protocol.protocol_version, implementationCommit: implementation });
   await writeFile(join(clean, "evidence", "orphan.json"), "{}\n");
   await assert.rejects(() => CalibrationArchive.open(clean), /orphan calibration evidence/);
+
+  for (const filename of ["CALIBRATION_RESULT.json", "PILOT_0_WORLD_CONFIGURATION.json"]) {
+    const rootOutput = await mkdtemp(join(tmpdir(), "civilization-calibration-root-output-"));
+    await new CalibrationArchive(rootOutput).initialize({ protocolVersion: protocol.protocol_version, implementationCommit: implementation });
+    await writeFile(join(rootOutput, filename), "{}\n");
+    await assert.rejects(() => CalibrationArchive.open(rootOutput), /orphan calibration result\/world-configuration/);
+  }
 });
 
 test("stopping proof cannot be emitted without an accepted candidate", () => {
@@ -264,6 +316,18 @@ test("stopping proof cannot be emitted without an accepted candidate", () => {
   const aggregate_metrics = Object.fromEntries(protocol.metrics.map(metric => [metric.metric_id, metric.acceptance.maximum !== undefined ? metric.acceptance.maximum + 1 : (metric.acceptance.minimum ?? 0) - 1]));
   assert.throws(() => buildCalibrationResult({ candidates: [{ parameter_set, parameter_set_hash: sha256(parameter_set), aggregate_metrics, accepted: false, selection_score: {}, candidate_attestation_hash: "a".repeat(64) }],
     manifests: [], protocolVersion: protocol.protocol_version, implementationCommit: implementation, incidents: [] }), /STOP_CALIBRATION/);
+});
+
+test("result builder recomputes acceptance and rejects forged maximin/stopping claims", () => {
+  const parameter_set = startingCalibrationParameterSet();
+  const aggregate_metrics = Object.fromEntries(protocol.metrics.map(metric => [metric.metric_id, 1_000_000_000]));
+  const forged = { parameter_set, parameter_set_hash: sha256(parameter_set), aggregate_metrics,
+    accepted: true, failures: [], candidate_attestation_hash: "a".repeat(64),
+    selection_score: { minimum_normalized_boundary_distance: 1_000_000_000,
+      worst_seed_metric_pass_fraction: 1, negative_cross_seed_metric_variance: 0,
+      negative_changes_from_start: 0, parameter_set_hash: sha256(parameter_set) } };
+  assert.throws(() => buildCalibrationResult({ candidates: [forged], manifests: protocol.seed_panel.seeds.map(seed => ({ seed })),
+    protocolVersion: protocol.protocol_version, implementationCommit: implementation, incidents: [] }), /STOP_CALIBRATION/);
 });
 
 test("CLI exposes frozen plan and has no empirical execution path", () => {

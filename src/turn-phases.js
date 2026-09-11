@@ -1,6 +1,6 @@
 import { assert, clone, sha256, stableId } from './core.js';
 import { ActionLedger, commitTurn, projectWorld } from './contracts.js';
-import { authoritativeState, resolveTurn } from './world.js';
+import { authoritativeState, resolveTurn, appendTerminalDisposition } from './world.js';
 import { discoverPolity } from './world-map.js';
 import { validateAction } from './world-actions.js';
 import { EvidenceStore } from './evidence.js';
@@ -54,13 +54,13 @@ function copyEvidence(evidence) {
  */
 export class TurnPhases {
   #world; #ledger; #runtimes; #now; #state; #budget; #inFlight = false;
-  constructor({ world, runtimes, ledger = new ActionLedger(world.evidence), budgetsMs = {}, now = Date.now, state = null }) {
+  constructor({ world, runtimes, ledger = new ActionLedger(world.evidence), budgetsMs = {}, now = Date.now, state = null, conditionValidator = assertAgentCondition }) {
     assert(world?.evidence && ledger instanceof ActionLedger && ledger.evidence === world.evidence, 'phase engine requires the actual world ledger');
     assert(Array.isArray(runtimes), 'explicit condition-bound runtimes required');
     assert(new Set(runtimes.map(r => r.actorId)).size === runtimes.length, 'duplicate phase principal');
     for (const runtime of runtimes) {
       assert(world.polities[runtime.actorId] && runtime.world === world, 'runtime/world principal mismatch');
-      assertAgentCondition(runtime.condition);
+      conditionValidator(runtime.condition);
       assert(runtime.memory instanceof MemoryStore && runtime.memory.evidence === world.evidence && runtime.memory.identityId === runtime.actorId, 'condition memory store mismatch');
     }
     assert(Object.values(world.polities).filter(p => p.alive).every(p => runtimes.some(r => r.actorId === p.id)), 'phase runtimes must cover active actors');
@@ -270,7 +270,8 @@ export class TurnPhases {
   }
   #resolve(fault) {
     const committed = this.#world.committedRecords.get(this.#state.committed_id); assert(committed, 'phase lacks sealed committed set');
-    if (!this.#world.resolvedCommits.has(committed.turn_committed_id)) resolveTurn(this.#world, committed, { fault });
+    if (!this.#world.resolvedCommits.has(committed.turn_committed_id)) resolveTurn(this.#world, committed,
+      { fault, deferDisposition: true, emitReducerSnapshot: false });
     assert(this.#world.turn === this.logicalTurn + 1, 'unexpected reducer turn increment');
     const next = clone(this.#state); for (const item of Object.values(next.submissions)) if (item.status === 'accepted') item.status = 'resolved';
     this.#save(next, 'committed_actions_resolved');
@@ -313,7 +314,7 @@ export class TurnPhases {
     const stateRef = this.#world.evidence.putPayload(state, 'authoritative_research');
     const event = this.#world.evidence.append({ eventType: 'SnapshotCreated', turn: this.logicalTurn, phase: 'snapshot',
       causality: { causation_ids: [this.#state.head_event_id] }, payload: { run_id: this.#world.runId, turn: this.logicalTurn,
-        state_ref: stateRef, state_hash: sha256(state), authoritative: true, lifecycle_version: TURN_PHASE_VERSION,
+        state_ref: stateRef, state_hash: sha256(state), authoritative: true, snapshot_class: 'POST_MEMORY_LIFECYCLE', lifecycle_version: TURN_PHASE_VERSION,
         reducer_turn: this.#world.turn, memory_archive_ref: this.#state.memory_archive_ref } });
     this.#world.snapshots.push({ turn: this.logicalTurn, state, state_hash: sha256(state) });
     const next = clone(this.#state); next.snapshot_ref = stateRef; next.snapshot_event_id = event.event_id; this.#save(next, 'post_memory_snapshot_complete');
@@ -388,13 +389,13 @@ const COMMANDS = new Set(['begin', 'projection', 'ready', 'diplomacy', 'submit',
 
 /** Restore actual condition-bound memory from independently reduced evidence.
  * Bindings are run-controller inputs, never participant-controlled HTTP fields. */
-export function phaseRuntimes(world, bindings) {
+export function phaseRuntimes(world, bindings, { conditionValidator = assertAgentCondition } = {}) {
   assert(Array.isArray(bindings) && bindings.length > 0, 'explicit phase bindings required');
   return bindings.map(binding => {
     assert(Object.keys(binding).every(k => ['actorId', 'sessionId', 'condition'].includes(k)), 'unknown phase binding field');
     const { actorId, sessionId, condition } = binding;
     assert(typeof sessionId === 'string' && sessionId.length > 0 && world.polities[actorId], 'invalid phase binding');
-    assertAgentCondition(condition);
+    conditionValidator(condition);
     const memory = new MemoryStore({ runId: world.runId, identityId: actorId, evidence: world.evidence,
       sessionId, capacity: world.config.memory.capacity, isActive: () => world.polities[actorId].alive });
     memory.bindRuntime({ enabled: condition.memory.mode !== 'state_only', isActive: () => world.polities[actorId].alive });
@@ -405,7 +406,7 @@ export function phaseRuntimes(world, bindings) {
 /** Durable command adapter. Run on a private RunService candidate; exceptions
  * discard that candidate. All reads of wall time within one command share its
  * captured `at`. No model/provider effect is performed by this function. */
-export function executeTurnPhaseCommand({ world, ledger, state = null, bindings, command, at, fault = () => {} }) {
+export function executeTurnPhaseCommand({ world, ledger, state = null, bindings, command, at, fault = () => {}, conditionValidator = assertAgentCondition }) {
   assert(Number.isSafeInteger(at) && at >= 0, 'recorded phase command clock required');
   assert(command && COMMANDS.has(command.operation) && Object.keys(command).every(k => ['operation', 'input'].includes(k)), 'unknown phase command');
   const input = clone(command.input ?? {}), operation = command.operation;
@@ -413,7 +414,7 @@ export function executeTurnPhaseCommand({ world, ledger, state = null, bindings,
     submit: ['actorId', 'actor', 'actions'], submit_model: ['actorId', 'result'], update_memory: ['actorId', 'request', 'context'], complete_interviews: [], advance: [] }[operation];
   assert(Object.keys(input).every(k => fields.includes(k)), 'unknown phase command input');
   assert(operation === 'begin' ? !state || state.closed : state && !state.closed, 'phase command lifecycle mismatch');
-  const runtimes = phaseRuntimes(world, bindings), start = world.evidence.events.length;
+  const runtimes = phaseRuntimes(world, bindings, { conditionValidator }), start = world.evidence.events.length;
   const before = { world: authoritativeState(world), phase: clone(state), bindings: clone(bindings) };
   const beforeRef = world.evidence.putPayload(before, 'turn_phase_observer');
   const commandInput = { operation, input }, inputRef = world.evidence.putPayload({ command: commandInput, at, bindings }, 'phase_controller_input');
@@ -424,7 +425,7 @@ export function executeTurnPhaseCommand({ world, ledger, state = null, bindings,
       action_ids: [], actor_ids: [], before_state_ref: beforeRef, after_state_ref: afterRef,
       detail: { phase_contract_version: TURN_PHASE_VERSION, stage, command_ref: inputRef, ...detail } } });
   const intent = mark('input', beforeRef, {});
-  const phases = new TurnPhases({ world, ledger, runtimes, now: () => at,
+  const phases = new TurnPhases({ world, ledger, runtimes, now: () => at, conditionValidator,
     budgetsMs: operation === 'begin' ? input.budgetsMs ?? {} : state.budgets.value, state: operation === 'begin' ? null : state });
   let result;
   if (operation === 'begin') result = { turn: phases.logicalTurn, phase: phases.phase };
@@ -437,7 +438,9 @@ export function executeTurnPhaseCommand({ world, ledger, state = null, bindings,
   else if (operation === 'complete_interviews') result = phases.completeInterviews();
   else result = phases.advance({ fault });
   const phaseState = phases.exportState(), afterRef = world.evidence.putPayload({ world: authoritativeState(world), phase: phaseState, bindings }, 'turn_phase_observer');
-  mark('complete', afterRef, { input_event_id: intent.event_id, result_ref: world.evidence.putPayload(result, 'phase_command_result') });
+  const completion = mark('complete', afterRef, { input_event_id: intent.event_id, result_ref: world.evidence.putPayload(result, 'phase_command_result') });
+  if (phaseState.closed && world.terminal)
+    appendTerminalDisposition(world, phaseState.turn, { causationIds: [completion.event_id] });
   return { phaseState, phaseBindings: clone(bindings), result: clone(result), eventCount: world.evidence.events.length - start };
 }
 
@@ -446,7 +449,7 @@ export function executeTurnPhaseCommand({ world, ledger, state = null, bindings,
  * Every phase/communication/battle/memory/snapshot output is freshly generated
  * and byte-compared. Never hydrate from either archived state reference.
  * Caller owns external ModelInvocation verification and advances by eventCount. */
-export function replayTurnPhaseCommand({ world, ledger, archive, cursor, state = null, bindings = null }) {
+export function replayTurnPhaseCommand({ world, ledger, archive, cursor, state = null, bindings = null, conditionValidator = assertAgentCondition }) {
   const event = archive.events[cursor], p = event?.payload;
   assert(event?.event_type === 'WorldTransition' && p.mechanic === PHASE_COMMAND_MECHANIC && p.detail.stage === 'input', 'phase replay requires command input marker');
   const recorded = content(archive, p.detail.command_ref);
@@ -455,7 +458,7 @@ export function replayTurnPhaseCommand({ world, ledger, archive, cursor, state =
   const start = world.evidence.events.length;
   assert(start === cursor, 'phase replay cursor mismatch');
   const generated = executeTurnPhaseCommand({ world, ledger, state, bindings: bindings ?? recorded.bindings,
-    command: recorded.command, at: recorded.at });
+    command: recorded.command, at: recorded.at, conditionValidator });
   for (let index = start; index < world.evidence.events.length; index++) {
     assert(archive.events[index] && sha256(world.evidence.events[index]) === sha256(archive.events[index]), 'phase command re-execution canonical event mismatch at ' + index);
   }

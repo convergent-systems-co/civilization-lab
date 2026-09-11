@@ -14,6 +14,7 @@ import {
   selectCalibrationCandidate,
   validateCalibrationProtocol
 } from "../src/calibration.js";
+import { reconstructCalibrationSearch, startingCalibrationParameterSet, validateCalibrationParameterSet } from "../src/calibration-runner.js";
 
 const parameters = JSON.parse(readFileSync(new URL("../PARAMETER_REGISTRY.spec.json", import.meta.url), "utf8"));
 const protocol = calibrationProtocol();
@@ -65,16 +66,17 @@ function manifest(seed, overrides = {}) {
 }
 
 function selectorFact(value, { status = "OBSERVED", numerator, denominator } = {}) {
-  if (status !== "OBSERVED") return { status, value: null, numerator: "0", denominator: "0", eligibility_count: "0" };
+  if (status !== "OBSERVED") return { status, value: null, scaled_value: null, numerator: "0", denominator: "0", eligibility_count: "0" };
   const d = denominator ?? 1_000_000;
   const n = numerator ?? Math.round(value * d);
-  return { status, value, numerator: String(n), denominator: String(d), eligibility_count: String(d) };
+  return { status, value, scaled_value: String(Math.round(value * 1_000_000)), numerator: String(n), denominator: String(d), eligibility_count: String(d) };
 }
 
 function opaqueSelectorPanel(mutator = () => {}) {
   const hash = "c".repeat(64);
   return protocol.seed_panel.seeds.map((seed, index) => {
     const metrics = Object.fromEntries(Object.entries(acceptedMetrics()).map(([id, value]) => [id, selectorFact(value)]));
+    metrics["conflict.dominant_action_share"].category_counts = { move: 1, research: 1 };
     mutator(metrics, index);
     return { opaque_run_alias: `run-${index}`, opaque_seed_alias: `seed-${index}`, candidate_alias: hash,
       metrics, disposition: "UNEVALUATED", treatment_blinding: protocol.blinding.selection_view };
@@ -113,6 +115,16 @@ test("bounded search operations are complete, deterministic, and contain no manu
   assert.ok(first.length > protocol.parameter_domains.length);
   assert.ok(first.length <= protocol.search_procedure.maximum_parameter_sets);
   assert.ok(first.every(operation => ["BASELINE", "SET", "SET_FIELD", "MULTIPLY_GROUP"].includes(operation.operation)));
+  const modelParameters = new Set(["model.generation", "model.context_budget", "model.retry"]);
+  const domainById = new Map(protocol.parameter_domains.map(domain => [domain.domain_id, domain.registry_parameter_id]));
+  assert(first.every(operation => operation.domain_id === null || !modelParameters.has(domainById.get(operation.domain_id))),
+    "initial no-Qwen Phase A must never enumerate model parameter operations");
+  const baseline = startingCalibrationParameterSet();
+  for (const id of modelParameters) {
+    const changed = structuredClone(baseline);
+    changed[id] = typeof changed[id] === "number" ? changed[id] + 1 : { ...changed[id], unauthorized_phase_a_change: true };
+    assert.throws(() => validateCalibrationParameterSet(changed), /held calibration parameter changed/);
+  }
 });
 
 test("missing domains, treatment metrics, effect access, or empirical authorization fail closed", () => {
@@ -122,7 +134,7 @@ test("missing domains, treatment metrics, effect access, or empirical authorizat
     p => { p.search_procedure.treatment_outputs_available = true; },
     p => { p.stopping_rule.effect_information_used = true; },
     p => { p.authorization.empirical_calibration = true; },
-    p => { p.parameter_domains = p.parameter_domains.filter(domain => domain.registry_parameter_id !== "model.generation"); }
+    p => { p.deferred_parameter_domains[0].registry_parameter_ids = ["model.generation", "model.retry"]; }
   ];
   for (const mutate of cases) {
     const candidate = structuredClone(protocol);
@@ -239,6 +251,18 @@ test("selection is maximin and deterministic with treatment-neutral tie breakers
   const exactB = { ...a, parameter_set_hash: "f".repeat(64), selection_score: { ...a.selection_score, parameter_set_hash: "f".repeat(64) } };
   assert.equal(selectCalibrationCandidate([exactB, exactA]).parameter_set_hash, "0".repeat(64));
   assert.throws(() => selectCalibrationCandidate([{ ...a, accepted: false }]), /STOP_CALIBRATION/);
+});
+
+test("an accepted baseline does not complete search before its deterministic qualifying frontier is evaluated", () => {
+  const parameterSet = startingCalibrationParameterSet();
+  const assessment = assessCalibrationCandidate({ parameter_set_hash: sha256(parameterSet),
+    seed_ids: protocol.seed_panel.seeds, aggregate_metrics: acceptedMetrics() });
+  const baselineRecord = { round: 0, candidate_index: 0, parent_parameter_set_hash: sha256(parameterSet),
+    parameter_set_hash: sha256(parameterSet), parameter_set: parameterSet,
+    operation: enumerateCalibrationOperations()[0], assessment };
+  const search = reconstructCalibrationSearch([baselineRecord], { maximumCandidates: protocol.search_procedure.maximum_parameter_sets });
+  assert.equal(search.complete, false, "first passing candidate must be mistaken for the complete maximin frontier");
+  assert.deepEqual(search.search_cursor, { round: 0, operation_index: 1, candidate_index: 1 });
 });
 
 test("parameter hash, baseline tag, protocol version, and seed provenance fail closed", () => {

@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { canonicalize, sha256 } from "../src/core.js";
 import { deriveCalibrationMetricFacts, divideHalfEven, decimalToScaled, assertMetricArtifact } from "../src/calibration-metrics.js";
 import { calibrationProtocol } from "../src/calibration.js";
+import { makeWorld, resolveTurn } from "../src/world.js";
+import { ActionLedger, commitTurn, projectWorld } from "../src/contracts.js";
+import { readEvidencePayload } from "../src/evidence.js";
 
 // Hand-constructed metric inputs. No world reducers, model calls, or calibration
 // search runs. Expected counts below were calculated independently of the collector.
@@ -10,7 +13,7 @@ function fixture(enriched = false) {
   const store = { events: [], payloads: new Map() };
   const put = value => { const bytes = canonicalize(value), ref = sha256(bytes); store.payloads.set(ref, { bytes }); return ref; };
   const emit = (type, turn, payload = {}, participants = [], extra = {}) => {
-    const event = { event_type: type, turn, event_id: `e${store.events.length}`, payload, participants, ...extra };
+    const event = { event_type: type, turn, sequence: store.events.length, event_id: `e${store.events.length}`, payload, participants, ...extra };
     store.events.push(event); return event;
   };
   const configuration = { phases: { actionLimit: 4 }, dynamics: { maxQuantity: 10000 }, initialFacilityTypes: [],
@@ -18,7 +21,7 @@ function fixture(enriched = false) {
     facilityTypes: {}, technologies: {} };
   const snapshots = Array.from({ length: 20 }, (_, turn) => ({ event: { turn }, state: {
     polities: Object.fromEntries(["a", "b"].map(id => [id, { id, alive: true, credits: 10, food: 10, resources: { iron: 5 },
-      citizens: [{ count: enriched ? 30 : 100 }], units: enriched ? [{ crew: [{ count: 70 }] }] : [], technologies: [],
+      citizens: [{ count: enriched ? 30 : 100 }], units: enriched ? [{ crew: [{ count: 70 }] }] : [], technologies: enriched && turn >= 4 ? ["t1"] : [],
       knowledge: enriched && turn >= 5 ? [id === "a" ? "b" : "a"] : [],
       reports: enriched && id === "a" && turn >= 6 ? [{ source: "activity_detection", id: "d1" }] : [] }])),
     facilities: { f1: { owner_id: "a", type: "barracks" }, f2: { owner_id: "b", type: "barracks" } }
@@ -34,15 +37,17 @@ function fixture(enriched = false) {
     emit("BattleResolved", 5, {}, ["a", "b"]);
     emit("WorldTransition", 2, { mechanic: "economy", detail: { production: { food: 10 }, consumption: 20 } });
     emit("WorldTransition", 4, { mechanic: "research_outcome", before_state_ref: put({ technologies: [] }), after_state_ref: put({ technologies: ["t1"] }) });
-    const loss = emit("PopulationUnitTransition", 6, { transition: "loss" });
-    emit("PopulationUnitTransition", 7, { transition: "loss" });
-    emit("PopulationUnitTransition", 8, { transition: "demobilization" }, [], { causality: { causation_ids: [loss.event_id] } });
-    emit("ActionSubmitted", 0, { submitted_actions: [{ action_id: "a1", type: "move" }, { action_id: "a2", type: "move" }, { action_id: "a3", type: "wait" }, { action_id: "rejected", type: "attack" }] });
+    const loss = emit("PopulationUnitTransition", 6, { transition: "loss" }, ["a"]);
+    emit("PopulationUnitTransition", 7, { transition: "loss" }, ["b"]);
+    emit("PopulationUnitTransition", 8, { transition: "demobilization" }, ["a"], { causality: { causation_ids: [loss.event_id] } });
+    const canonicalActions = [{ action_id: "a1", type: "move" }, { action_id: "a2", type: "move" }, { action_id: "a3", type: "wait" }, { action_id: "rejected", type: "attack" }];
+    emit("ActionSubmitted", 0, { submitted_actions: canonicalActions.map(({ type }) => ({ type })), actions: canonicalActions });
     emit("ActionAccepted", 0, { accepted_action_ids: ["a1", "a2", "a3"] });
     emit("ActionRejected", 0, { errors: [{ code: "action_limit_exceeded" }], submitted_action_count: 1 });
-    for (const classification of ["timeout", "success"]) emit("ModelInvocation", 0, {}, [], {
-      provenance: { input_refs: [put({ stage: "complete", classification })] }
-    });
+    emit("WorldTransition", 0, { mechanic: "turn_phase_state", detail: {
+      reason: "phase_advanced", deadline_reached: true, missing_actor_ids: ["a"] } });
+    emit("WorldTransition", 1, { mechanic: "turn_phase_state", detail: {
+      reason: "phase_advanced", deadline_reached: false, missing_actor_ids: [] } });
   }
   return { store, snapshots, configuration, synthetic: true, emit, put };
 }
@@ -77,10 +82,10 @@ const ORACLE = {
   "bandwidth.action_budget_utilization": [0, 0.0125, 2, 160],
   "bandwidth.phase_limit_block_rate": [null, 0.25, 1, 4],
   "runtime.deadline_failure_rate": [null, 0.5, 1, 2],
-  "relational.median_commitment_opportunities": [0, 1, 1, 1],
-  "relational.median_reciprocity_opportunities": [0, 2, 2, 1],
+  "relational.median_commitment_opportunities": [0, 30, 30, 1],
+  "relational.median_reciprocity_opportunities": [0, 3, 3, 1],
   "relational.rupture_opportunity_run_rate": [0, 1, 1, 1],
-  "relational.repeated_interaction_density": [null, 0.052632, 1, 19],
+  "relational.repeated_interaction_density": [null, 0.105263, 2, 19],
   "relational.zero_opportunity_run_rate": [1, 0, 0, 1]
 };
 assert.deepEqual(Object.keys(ORACLE).sort(), calibrationProtocol().metrics.map(m => m.metric_id).sort());
@@ -106,6 +111,15 @@ test("failed research and non-economic elimination cannot fabricate completion o
   assert.equal(m["conflict.annihilation_rate"].value, 1);
 });
 
+test("economy ratio compares food production with food consumption and ignores unlike outputs", () => {
+  const f = fixture();
+  f.emit("WorldTransition", 2, { mechanic: "economy", actor_ids: ["a"], detail: {
+    production: { food: 10, credits: 500, resources: { iron: 700 } }, consumption: 20, deficit: 10
+  } });
+  const fact = deriveCalibrationMetricFacts(f)["economy.median_production_consumption_ratio"];
+  assert.equal(fact.numerator, "10"); assert.equal(fact.denominator, "20"); assert.equal(fact.value, 0.5);
+});
+
 for (const [turn, expected] of [[14, 1], [15, 0], [16, 0]]) test(`annihilation and depletion before turn 16: engine index ${turn}`, () => {
   const f = fixture();
   f.emit("WorldTransition", turn, { mechanic: "polity_elimination" });
@@ -121,14 +135,22 @@ test("a run absorbed at turn 16 is not prematurely absorbed before turn 16", () 
   assert.equal(deriveCalibrationMetricFacts(f)["viability.premature_absorbing_rate"].value, 0);
 });
 
-test("explicit economy collapse and registered saturation are counted without hidden defaults", () => {
+test("economy collapse is reconstructed from production-shaped transitions and objective disposition", () => {
   const f = fixture(); f.configuration.dynamics.maxQuantity = 11;
+  f.configuration.facilityTypes = { replacement: { credits: 0, food: 0, resources: {}, prerequisites: [] } };
   f.snapshots[4].state.polities.a.food = 11;
-  f.emit("WorldTransition", 4, { mechanic: "economy", detail: { production: { food: 0 }, consumption: 10, irreversible_incapacity: true } });
+  f.snapshots[4].state.polities.b.food = 11;
+  for (const polity of Object.values(f.snapshots.at(-1).state.polities)) {
+    polity.citizens = []; polity.units = []; polity.population = 0; polity.permanently_action_incapable = true;
+    f.emit("WorldTransition", 19, { mechanic: "economy", actor_ids: [polity.id],
+      before_state_ref: f.put({ ...polity, citizens: [{ count: 1 }], population: 1 }), after_state_ref: f.put(polity),
+      detail: { production: { food: 0, credits: 0, resources: {} }, consumption: 10, deficit: 10 } });
+  }
+  f.emit("RunDisposition", 19, { replacement_policy: { reason: "all_remaining_permanently_action_incapable" } });
   const m = deriveCalibrationMetricFacts(f);
   assert.equal(m["economy.insolvency_or_collapse_rate"].value, 1);
   assert.equal(m["economy.median_production_consumption_ratio"].value, 0);
-  assert.equal(m["economy.unused_resource_saturation_rate"].value, 0.025);
+  assert.equal(m["economy.unused_resource_saturation_rate"].value, 0.05);
 });
 
 test("recruitment requires free population and an existing facility", () => {
@@ -171,13 +193,13 @@ test("eight battle turns in final ten qualify, seven do not; short run is censor
   assert.equal(deriveCalibrationMetricFacts(f)["conflict.perpetual_conflict_rate"].status, "CENSORED");
 });
 
-test("reciprocity requires a full five-turn window and eligible relational category", () => {
+test("reciprocity opportunity uses canonical cross-polity affordances and a full five-turn window", () => {
   const f = fixture();
   for (const [turn, category] of [[14, "exchange"], [15, "exchange"], [2, "chatter"]])
     f.emit("MessageSent", turn, { from: "a", to: "b", relational_category: category }, ["a", "b"]);
   f.emit("BattleResolved", 15, {}, ["a", "b"]);
   const m = deriveCalibrationMetricFacts(f);
-  assert.equal(m["relational.median_reciprocity_opportunities"].value, 1);
+  assert.equal(m["relational.median_reciprocity_opportunities"].value, 2);
   assert.equal(m["relational.rupture_opportunity_run_rate"].value, 0);
   assert.equal(m["relational.zero_opportunity_run_rate"].value, 0);
 });
@@ -213,4 +235,42 @@ test("turn-1 discovery and detection use initial knowledge and count reports onc
   const prior = deriveCalibrationMetricFacts(f);
   assert.equal(prior["information.median_discovery_turn"].status, "ZERO_OPPORTUNITY");
   assert.equal(prior["information.detection_event_rate"].numerator, "0");
+});
+
+test("production-shaped accepted actions resolve through canonical action IDs", () => {
+  const world = makeWorld({ runId: "calibration-production-action-lineage", seed: "production-action-lineage" });
+  const actorId = "polity-1", ledger = new ActionLedger(world.evidence);
+  const submission = ledger.submit({ runId: world.runId, turnId: "turn-0", actorId,
+    actor: { persistent_identity_id: actorId, session_id: "session-1", invocation_id: "invocation-1" },
+    actions: [{ type: "wait" }], projection: projectWorld(world, actorId), phase: "actions" });
+  const validated = ledger.validate(submission, world);
+  resolveTurn(world, commitTurn(world, ledger, [validated]));
+  const snapshots = world.evidence.events.filter(event => event.event_type === "SnapshotCreated")
+    .map(event => ({ event, state: readEvidencePayload(world.evidence, event.payload.state_ref) }));
+  const facts = deriveCalibrationMetricFacts({ store: world.evidence, snapshots, configuration: world.config, synthetic: true });
+  assert.equal(facts["conflict.dominant_action_share"].status, "ZERO_OPPORTUNITY");
+  assert.equal(facts["bandwidth.action_budget_utilization"].numerator, "0");
+});
+
+test("endpoint coding cannot alter treatment-neutral calibration opportunity counts", () => {
+  const f = fixture(true), messages = f.store.events.filter(event => event.event_type === "MessageSent");
+  const before = deriveCalibrationMetricFacts(f)["relational.median_reciprocity_opportunities"];
+  const mappingRef = f.put({ refs: { [messages[0].event_id]: "observation-1", [messages[1].event_id]: "observation-2" } });
+  const row = { id: "reciprocity-1", kind: "reciprocity", source: "observation-1", actor: "subject-1",
+    counterparty: "subject-2", eligibility: "ELIGIBLE", observation_status: "OBSERVED", confidence: 1, ambiguity: null,
+    category: "resource_assistance_exchange", responses: [{ source: "observation-2", actor: "subject-2",
+      counterparty: "subject-1", polarity: "POSITIVE", category: "retaliatory_response" }] };
+  const prior = f.emit("BehaviorCoded", 18, { mapping_ref: mappingRef, annotations: [{ ...row, id: "superseded" }, row], supersedes: null });
+  f.emit("BehaviorCoded", 19, { mapping_ref: mappingRef, annotations: [row], supersedes: prior.event_id });
+  const after = deriveCalibrationMetricFacts(f)["relational.median_reciprocity_opportunities"];
+  assert.deepEqual(after, before);
+});
+
+test("channel membership is canonical contact even when transition participants list only the initiator", () => {
+  const f = fixture();
+  f.emit("WorldTransition", 2, { mechanic: "channels", before_state_ref: f.put({}),
+    after_state_ref: f.put({ channel: { id: "channel", members: ["a", "b"] } }), actor_ids: ["a"] }, ["a"]);
+  const facts = deriveCalibrationMetricFacts(f);
+  assert.equal(facts["contact.median_first_contact_turn"].value, 3);
+  assert.equal(facts["contact.meaningful_multi_polity_run_rate"].value, 0);
 });

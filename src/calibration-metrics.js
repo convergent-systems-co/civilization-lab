@@ -1,5 +1,5 @@
 import { assert, canonicalize, clone, sha256 } from "./core.js";
-import { modelDiagnostic, readEvidencePayload } from "./evidence.js";
+import { readEvidencePayload } from "./evidence.js";
 
 export const METRIC_STATUS = Object.freeze({
   OBSERVED: "OBSERVED",
@@ -56,17 +56,20 @@ export function decimalToScaled(value, scale = RATIO_SCALE) {
   return divideHalfEven(numerator * BigInt(scale), denominator);
 }
 
-export function metricFact({ numerator, denominator = 1, eligibility = denominator, status = METRIC_STATUS.OBSERVED, note = null }) {
+export function metricFact({ numerator, denominator = 1, eligibility = denominator, status = METRIC_STATUS.OBSERVED, note = null, categoryCounts = null }) {
   const n = BigInt(numerator), d = BigInt(denominator), e = BigInt(eligibility);
   assert(e >= 0n, "metric eligibility cannot be negative");
   if (status === METRIC_STATUS.OBSERVED) assert(d > 0n, "observed metric requires a positive denominator");
   else assert(d === 0n || status === METRIC_STATUS.CENSORED || status === METRIC_STATUS.UNEVALUABLE, "non-observed metric denominator/status mismatch");
+  const scaled = status === METRIC_STATUS.OBSERVED ? divideHalfEven(n * RATIO_SCALE, d).toString() : null;
   return Object.freeze({
     status,
     numerator: n.toString(),
     denominator: d.toString(),
     eligibility_count: e.toString(),
-    value: status === METRIC_STATUS.OBSERVED ? fixedRatio(n, d) : null,
+    scaled_value: scaled,
+    value: scaled === null ? null : Number(scaled) / Number(RATIO_SCALE),
+    ...(categoryCounts ? { category_counts: Object.fromEntries(Object.entries(categoryCounts).sort()) } : {}),
     ...(note ? { note } : {})
   });
 }
@@ -100,12 +103,12 @@ export const CALIBRATION_METRIC_DEFINITIONS = Object.freeze(Object.fromEntries([
   definition("contact.median_first_contact_turn", ["MessageSent", "BattleResolved", "WorldTransition"], "runs with canonical cross-polity contact", "first contact turn", "one run", "first qualifying event", "ZERO_OPPORTUNITY and excluded from conditional median"),
   definition("contact.mean_post_contact_events_per_turn", ["MessageSent", "BattleResolved", "WorldTransition"], "observable turns from first contact", "qualifying post-contact events", "observable post-contact turns", "first contact through terminal", "ZERO_OPPORTUNITY when no contact"),
   definition("contact.meaningful_multi_polity_run_rate", ["MessageSent", "BattleResolved", "WorldTransition"], "one valid run", "at least two distinct qualifying cross-polity interactions", "one run", "full run", "observed zero"),
-  definition("economy.median_production_consumption_ratio", ["WorldTransition"], "runs with positive canonical consumption", "canonical produced consumables", "canonical consumed consumables", "all economy transitions", "ZERO_OPPORTUNITY when no consumption"),
+  definition("economy.median_production_consumption_ratio", ["WorldTransition"], "runs with positive canonical food consumption", "canonical food production", "canonical food consumption", "all economy transitions", "ZERO_OPPORTUNITY when no food consumption"),
   definition("economy.insolvency_or_collapse_rate", ["WorldTransition", "RunDisposition"], "one valid run", "explicit irreversible economy-caused incapacity", "one run", "full run", "observed zero"),
   definition("economy.unused_resource_saturation_rate", ["SnapshotCreated"], "surviving polity-turns", "eligible polity-turns at registered maximum or without consequential spend path", "surviving polity-turns", "all snapshots", "ZERO_OPPORTUNITY when no surviving polity-turn"),
-  definition("technology.median_first_completion_turn", ["WorldTransition"], "runs with verified technology acquisition", "first acquisition turn", "one run", "first before/after technology-set gain", "ZERO_OPPORTUNITY and excluded from conditional median"),
-  definition("technology.no_completion_rate", ["WorldTransition"], "one valid run", "no verified technology acquisition", "one run", "full run", "observed zero/one"),
-  definition("technology.trivial_completion_rate", ["WorldTransition"], "one valid run", "verified acquisition before turn 3", "one run", "first completion", "observed zero"),
+  definition("technology.median_first_completion_turn", ["SnapshotCreated"], "runs with verified technology acquisition", "first acquisition turn", "one run", "first authoritative before/after technology-set gain", "ZERO_OPPORTUNITY and excluded from conditional median"),
+  definition("technology.no_completion_rate", ["SnapshotCreated"], "one valid run", "no verified technology acquisition", "one run", "full run", "observed zero/one"),
+  definition("technology.trivial_completion_rate", ["SnapshotCreated"], "one valid run", "verified acquisition before turn 3", "one run", "first authoritative acquisition", "observed zero"),
   definition("population.recruitment_feasible_run_rate", ["SnapshotCreated"], "one valid run", "any surviving polity-turn satisfying registered unit, facility, technology and resource prerequisites", "one run", "full run", "observed zero"),
   definition("population.depletion_rate", ["SnapshotCreated"], "one valid run", "affiliated population including unit crews falls by at least 75% before turn 16", "one run", "turns 1-15", "observed zero"),
   definition("population.unit_saturation_rate", ["SnapshotCreated"], "surviving polity-turns with affiliated population", "polity-turns with more than 60% of affiliated population in unit crews", "eligible polity-turns", "all snapshots", "ZERO_OPPORTUNITY when no affiliated population"),
@@ -120,12 +123,12 @@ export const CALIBRATION_METRIC_DEFINITIONS = Object.freeze(Object.fromEntries([
   definition("information.permanent_isolation_rate", ["SnapshotCreated"], "one valid run", "no external polity discovered by turn 12", "one run", "turns 1-12", "observed one for isolation"),
   definition("bandwidth.action_budget_utilization", ["ActionAccepted", "ActionSubmitted", "TurnCommitted", "RunCreated", "SnapshotCreated"], "registered slots for alive action-capable actors in each immutable pre-resolution committed state", "accepted non-wait actions", "pre-resolution eligible actors multiplied by the registered action limit", "each committed turn, using RunCreated state for turn 0 and the preceding turn snapshot thereafter", "ZERO_OPPORTUNITY when no eligible actors"),
   definition("bandwidth.phase_limit_block_rate", ["ActionRejected"], "otherwise-valid action attempts plus accepted actions", "otherwise-valid attempts rejected solely for action_limit_exceeded", "eligible attempts", "full run", "ZERO_OPPORTUNITY when no attempts"),
-  definition("runtime.deadline_failure_rate", ["ModelInvocation"], "attempted invocation completions", "canonical diagnostics classified deadline or timeout", "attempted invocations", "full invocation lineage", "ZERO_OPPORTUNITY when no model invocations"),
-  definition("relational.median_commitment_opportunities", ["BehaviorCoded"], "treatment-blind eligible commitment annotations", "eligible commitments", "one run", "full run", "observed zero"),
-  definition("relational.median_reciprocity_opportunities", ["BehaviorCoded"], "eligible initiating relational actions with five-turn observation window", "eligible reciprocity opportunities", "one run", "five-turn window", "observed zero"),
-  definition("relational.rupture_opportunity_run_rate", ["BehaviorCoded"], "one valid run", "at least one eligible rupture with sufficient repair observation", "one run", "rupture-attributed window", "observed zero"),
-  definition("relational.repeated_interaction_density", ["BehaviorCoded"], "observable post-contact turns", "linked repeated same-dyad relational interactions", "observable post-contact turns", "full linked history", "ZERO_OPPORTUNITY when no contact window"),
-  definition("relational.zero_opportunity_run_rate", ["BehaviorCoded"], "one valid run", "zero eligible commitment, reciprocity and rupture opportunities", "one run", "full run", "observed one for structural zero")
+  definition("runtime.deadline_failure_rate", ["WorldTransition"], "canonical participant/controller phase opportunities", "phase transitions closed by deadline with missing required participants or outputs", "canonical interactive/interview phase closures", "full controller lineage", "ZERO_OPPORTUNITY when no phase opportunities"),
+  definition("relational.median_commitment_opportunities", ["SnapshotCreated"], "identified contacted dyad-turns with a permitted communication/action affordance", "treatment-neutral commitment measurement opportunities", "one run", "full run", "observed zero; formed promises and endpoint coding are not required"),
+  definition("relational.median_reciprocity_opportunities", ["MessageSent","WorldTransition","BattleResolved"], "cross-polity initiating actions with five-turn observation window", "eligible reciprocity measurement opportunities", "one run", "five-turn window", "observed zero"),
+  definition("relational.rupture_opportunity_run_rate", ["BattleResolved","WorldTransition"], "one valid run", "at least one hostile rupture with sufficient repair observation", "one run", "rupture-attributed window", "observed zero"),
+  definition("relational.repeated_interaction_density", ["MessageSent","WorldTransition","BattleResolved"], "observable post-contact turns", "repeated same-dyad canonical interactions", "observable post-contact turns", "full linked history", "ZERO_OPPORTUNITY when no contact window"),
+  definition("relational.zero_opportunity_run_rate", ["SnapshotCreated","MessageSent","WorldTransition","BattleResolved"], "one valid run", "zero commitment-affordance, reciprocity and rupture measurement opportunities", "one run", "full run", "observed one for structural zero")
 ].map(item => [item.metric_id, item])));
 
 export const CALIBRATION_METRIC_DEFINITION_HASH = sha256(CALIBRATION_METRIC_DEFINITIONS);
@@ -137,8 +140,10 @@ export function assertMetricArtifact(metrics, protocol) {
     assert(fact && Object.values(METRIC_STATUS).includes(fact.status), `invalid metric status: ${id}`);
     assert(/^[-]?\d+$/.test(fact.numerator) && /^\d+$/.test(fact.denominator) && /^\d+$/.test(fact.eligibility_count), `invalid metric counts: ${id}`);
     assert(fact.definition_hash === sha256(CALIBRATION_METRIC_DEFINITIONS[id]), `metric definition binding mismatch: ${id}`);
-    if (fact.status === METRIC_STATUS.OBSERVED) assert(typeof fact.value === "number" && Number.isFinite(fact.value) && BigInt(fact.denominator) > 0n, `invalid observed metric: ${id}`);
-    else assert(fact.value === null, `non-observed metric has a value: ${id}`);
+    if (fact.status === METRIC_STATUS.OBSERVED) {
+      assert(typeof fact.value === "number" && Number.isFinite(fact.value) && /^-?\d+$/.test(fact.scaled_value ?? "") && BigInt(fact.denominator) > 0n, `invalid observed metric: ${id}`);
+      assert(BigInt(fact.scaled_value) === divideHalfEven(BigInt(fact.numerator) * RATIO_SCALE, BigInt(fact.denominator)), `metric fixed-point value mismatch: ${id}`);
+    } else assert(fact.value === null && fact.scaled_value === null, `non-observed metric has a value: ${id}`);
   }
   return true;
 }
@@ -184,38 +189,41 @@ function recruitmentAvailable(polity, configuration, facilities) {
 }
 
 function acceptedActionTypes(events) {
-  const submitted = new Map();
+  const canonicalActions = new Map();
   for (const event of events.filter(item => item.event_type === "ActionSubmitted")) {
-    for (const action of body(event).submitted_actions ?? body(event).actions ?? []) submitted.set(action.action_id, action.type);
+    // ActionAccepted names the canonical IDs minted by ActionLedger, never a
+    // participant-supplied label from submitted_actions.
+    for (const action of body(event).actions ?? []) canonicalActions.set(action.action_id, action.type);
   }
   const accepted = new Set(events.filter(item => item.event_type === "ActionAccepted").flatMap(item => body(item).accepted_action_ids ?? []));
   // Empty-submission turns legitimately have no ActionAccepted event. Never infer
   // acceptance from ActionSubmitted or database order.
   const counts = new Map();
   for (const id of accepted) {
-    const type = submitted.get(id); assert(type, "accepted action lacks submitted-action lineage");
+    const type = canonicalActions.get(id); assert(type, "accepted action lacks canonical ActionSubmitted lineage");
     if (type !== "wait") counts.set(type, (counts.get(type) ?? 0) + 1);
   }
   return { counts, acceptedNonWait: sum([...counts.values()]), acceptedCount: accepted.size };
 }
 
-function relationalFacts(events, synthetic) {
-  const coded = events.filter(event => event.event_type === "BehaviorCoded").flatMap(event => body(event).annotations ?? []);
-  if (coded.length) {
-    const commitments = coded.filter(item => item.kind === "commitment" && item.eligibility === "ELIGIBLE");
-    const reciprocity = coded.filter(item => item.kind === "reciprocity" && item.eligibility === "ELIGIBLE" && item.observation_window_turns === 5);
-    const ruptures = coded.filter(item => ["repair", "rupture"].includes(item.kind) && item.eligibility === "ELIGIBLE" && item.sufficient_opportunity === true);
-    const interactions = coded.filter(item => item.kind === "relational_interaction" && item.eligibility === "ELIGIBLE");
-    return { commitments, reciprocity, ruptures, interactions };
+function relationalFacts(store, snapshots) {
+  const events = store.events, lastTurn = Math.max(-1, ...events.map(event => event.turn));
+  const commitments = [];
+  for (const snapshot of snapshots) for (const [actorId, polity] of Object.entries(snapshot.state.polities ?? {})) {
+    if (!alive(polity) || polity.permanently_action_incapable === true) continue;
+    for (const other of [...knownPolities(polity)].filter(id => id !== actorId && alive(snapshot.state.polities?.[id])).sort())
+      commitments.push({ actor_id: actorId, counterparty_id: other, turn: snapshot.event.turn,
+        basis: "AUTHORIZED_CONTACT_AND_PARTICIPANT_ACTION_AFFORDANCE" });
   }
-  assert(synthetic, "empirical relational opportunity metrics require verified treatment-blind BehaviorCoded evidence");
-  const messages = events.filter(event => event.event_type === "MessageSent").map(event => ({ event, value: body(event) }));
-  const categories = new Set(["resource_assistance", "exchange", "fulfilled_commitment", "cooperative_coordination", "defensive_assistance", "information_sharing", "retaliation", "repair"]);
-  const interactions = messages.filter(item => item.value.from && item.value.to && item.value.from !== item.value.to && categories.has(item.value.relational_category));
-  const commitments = messages.filter(item => item.value.participant_label === "promise" && item.value.from && item.value.to && item.value.future_evaluable === true);
-  const lastTurn = Math.max(-1, ...events.map(event => event.turn));
+  const interactionEvents = events.filter(event => crossPolity(event) && (event.event_type === "MessageSent" || event.event_type === "BattleResolved" ||
+    event.event_type === "WorldTransition" && ["transfer","share_technology","hostile_action","channels","diplomacy_phase_command"].includes(body(event).mechanic)));
+  const interactions = interactionEvents.flatMap(event => {
+    const ids = [...participants(event)].sort();
+    return ids.length >= 2 ? [{ event, actor_id: body(event).from ?? ids[0], counterparty_id: body(event).to ?? ids[1] }] : [];
+  });
   const reciprocity = interactions.filter(item => item.event.turn + 5 <= lastTurn);
-  const ruptures = events.filter(event => event.event_type === "BattleResolved" && event.turn + 5 <= lastTurn).map(event => ({ event }));
+  const ruptures = events.filter(event => (event.event_type === "BattleResolved" ||
+    event.event_type === "WorldTransition" && body(event).mechanic === "hostile_action") && event.turn + 5 <= lastTurn).map(event => ({ event }));
   return { commitments, reciprocity, ruptures, interactions };
 }
 
@@ -232,38 +240,61 @@ export function deriveCalibrationMetricFacts({ store, snapshots, configuration, 
   const dispositionReason = body(disposition ?? {}).replacement_policy?.reason ?? null;
   const objectiveEarly = continuation < 16 && ["insufficient_surviving_distinct_participants", "all_remaining_permanently_action_incapable"].includes(dispositionReason);
 
-  const contactMechanics = new Set(["transfer", "transfer_unit", "transfer_population", "share_technology", "hostile_action", "channels"]);
-  const contacts = events.filter(event => crossPolity(event) && (event.event_type === "MessageSent" || event.event_type === "BattleResolved" ||
-    (event.event_type === "WorldTransition" && contactMechanics.has(body(event).mechanic))));
+  const contactMechanics = new Set(["transfer", "transfer_unit", "transfer_population", "share_technology", "hostile_action"]);
+  const channelContact = event => {
+    if (event.event_type !== "WorldTransition" || body(event).mechanic !== "channels") return false;
+    const before = readEvidencePayload(store, body(event).before_state_ref);
+    const after = readEvidencePayload(store, body(event).after_state_ref);
+    return Object.values(after ?? {}).some(channel => {
+      const prior = new Set(before?.[channel.id]?.members ?? []), members = new Set(channel.members ?? []);
+      return members.size >= 2 && (!before?.[channel.id] || [...members].some(id => !prior.has(id)));
+    });
+  };
+  const contacts = events.filter(event => (crossPolity(event) && (event.event_type === "MessageSent" || event.event_type === "BattleResolved" ||
+    (event.event_type === "WorldTransition" && contactMechanics.has(body(event).mechanic)))) || channelContact(event));
   const firstContactTurn = contacts.length ? Math.min(...contacts.map(event => event.turn + 1)) : null;
   const postContactTurns = firstContactTurn == null ? 0 : continuation - firstContactTurn + 1;
   const contactKeys = new Set(contacts.map(event => `${event.event_type}:${event.event_id}`));
 
   const economy = events.filter(event => event.event_type === "WorldTransition" && body(event).mechanic === "economy");
   let produced = 0, consumed = 0;
+  const latestEconomyByActor = new Map();
   for (const event of economy) {
     const detail = body(event).detail;
     assert(Number.isSafeInteger(detail?.consumption) && detail.consumption >= 0, "economy metric requires canonical integer consumption");
-    const production = detail.production ?? {};
-    const amount = sum([production.food ?? 0, production.credits ?? 0, ...Object.values(production.resources ?? {})]);
-    assert(Number.isSafeInteger(amount) && amount >= 0, "economy metric requires canonical integer production");
+    const production = detail.production ?? {}, amount = production.food ?? 0;
+    assert(Number.isSafeInteger(amount) && amount >= 0, "economy metric requires canonical integer food production");
     produced += amount; consumed += detail.consumption;
+    for (const actorId of body(event).actor_ids ?? []) latestEconomyByActor.set(actorId, event);
   }
-  const economyCollapse = events.some(event => event.event_type === "WorldTransition" && body(event).mechanic === "economy" && body(event).detail?.irreversible_incapacity === true);
+  const dispositionProvesEconomyCollapse = dispositionReason === "all_remaining_permanently_action_incapable" &&
+    Object.values(last?.polities ?? {}).filter(alive).length > 0 &&
+    Object.values(last.polities).filter(alive).every(polity => {
+      const event = latestEconomyByActor.get(polity.id), detail = body(event ?? {}).detail;
+      if (polity.permanently_action_incapable !== true || !(detail?.deficit > 0) || !body(event).after_state_ref) return false;
+      const after = readEvidencePayload(store, body(event).after_state_ref);
+      return affiliatedPopulation(after) === 0;
+    });
+  const economyCollapse = dispositionProvesEconomyCollapse;
   const maxQuantity = configuration.dynamics?.maxQuantity;
   assert(Number.isSafeInteger(maxQuantity) && maxQuantity > 0, "resource metric requires registered maximum quantity");
   let saturated = 0, resourceTurns = 0;
-  for (const state of states) for (const polity of Object.values(state.polities ?? {}).filter(alive)) {
-    resourceTurns++;
-    const atMaximum = [polity.food ?? 0, polity.credits ?? 0, ...Object.values(polity.resources ?? {})].some(value => value >= maxQuantity);
-    if (atMaximum || !consequentialSpendPath(polity, configuration, state.facilities)) saturated++;
+  for (const state of states) {
+    const surviving = Object.values(state.polities ?? {}).filter(alive);
+    for (const polity of surviving) {
+      resourceTurns++;
+      const balances = [polity.food ?? 0, polity.credits ?? 0, ...Object.values(polity.resources ?? {})];
+      if (balances.some(value => value >= maxQuantity) || !consequentialSpendPath(polity, configuration, state.facilities)) saturated++;
+    }
   }
 
   const technologyCompletions = [];
-  for (const event of events.filter(item => item.event_type === "WorldTransition" && ["research_outcome", "reverse_engineer_outcome"].includes(body(item).mechanic))) {
-    const before = readEvidencePayload(store, body(event).before_state_ref), after = readEvidencePayload(store, body(event).after_state_ref);
-    const gained = (after.technologies ?? []).filter(id => !(before.technologies ?? []).includes(id));
-    if (gained.length) technologyCompletions.push(event.turn + 1);
+  for (let index = 0; index < snapshots.length; index++) {
+    const before = index === 0 ? first : snapshots[index - 1].state, after = snapshots[index].state;
+    for (const [id, polity] of Object.entries(after.polities ?? {})) {
+      const prior = new Set(before.polities?.[id]?.technologies ?? []);
+      if ((polity.technologies ?? []).some(technology => !prior.has(technology))) technologyCompletions.push(snapshots[index].event.turn + 1);
+    }
   }
   const firstTechnology = technologyCompletions.length ? Math.min(...technologyCompletions) : null;
 
@@ -271,13 +302,21 @@ export function deriveCalibrationMetricFacts({ store, snapshots, configuration, 
   const initialPopulation = totalAffiliated(first);
   const depletion = snapshots.some(item => item.event.turn + 1 < 16 && initialPopulation > 0 && totalAffiliated(item.state) * 4 <= initialPopulation);
   let unitSaturatedTurns = 0, unitEligibleTurns = 0;
-  for (const state of states) for (const polity of Object.values(state.polities ?? {}).filter(alive)) {
-    const affiliated = affiliatedPopulation(polity); if (!affiliated) continue;
-    unitEligibleTurns++; if (sum(units(polity).map(crewCount)) * 10 > affiliated * 6) unitSaturatedTurns++;
+  for (const state of states) {
+    const surviving = Object.values(state.polities ?? {}).filter(alive);
+    for (const polity of surviving) {
+      const affiliated = affiliatedPopulation(polity); if (!affiliated) continue;
+      const unitCrews = sum(units(polity).map(crewCount));
+      unitEligibleTurns++; if (unitCrews * 10 > affiliated * 6) unitSaturatedTurns++;
+    }
   }
   const losses = events.filter(event => event.event_type === "PopulationUnitTransition" && ["loss", "destruction", "death"].includes(body(event).transition));
   const recoveries = events.filter(event => event.event_type === "PopulationUnitTransition" && ["demobilization", "return_to_population", "recovery"].includes(body(event).transition));
-  const recoveredLosses = losses.filter(loss => recoveries.some(recovery => recovery.turn >= loss.turn && (recovery.causality?.causation_ids ?? []).includes(loss.event_id))).length;
+  // Recovery is a later polity-level population/unit transition, not an
+  // impossible claim that a destroyed crew itself demobilized. Canonical event
+  // order and shared polity lineage establish the longitudinal relationship.
+  const recoveredLosses = losses.filter(loss => recoveries.some(recovery => recovery.sequence > loss.sequence &&
+    recovery.turn >= loss.turn && [...participants(loss)].some(id => participants(recovery).has(id)))).length;
 
   const battles = events.filter(event => event.event_type === "BattleResolved");
   const annihilation = events.some(event => event.event_type === "WorldTransition" && body(event).mechanic === "polity_elimination" && event.turn + 1 < 16);
@@ -329,16 +368,12 @@ export function deriveCalibrationMetricFacts({ store, snapshots, configuration, 
   }).reduce((total, event) => total + (body(event).submitted_action_count ?? body(event).actions?.length ?? 1), 0);
   const eligibleAttempts = action.acceptedCount + soleLimitBlocks;
 
-  const invocations = events.filter(event => event.event_type === "ModelInvocation");
-  const completedInvocations = invocations.filter(event => {
-    try { return modelDiagnostic(store, event)?.stage === "complete"; } catch { return false; }
-  });
-  const deadlineFailures = completedInvocations.filter(event => {
-    const diagnostic = modelDiagnostic(store, event);
-    return diagnostic && (["deadline", "timeout", "infrastructure"].includes(diagnostic.classification) || /deadline|timeout/i.test(diagnostic.failure_code ?? ""));
-  }).length;
+  const phaseClosures = events.filter(event => event.event_type === "WorldTransition" && body(event).mechanic === "turn_phase_state" &&
+    ["phase_advanced", "turn_closed", "isolated_interviews_complete"].includes(body(event).detail?.reason));
+  const deadlineFailures = phaseClosures.filter(event => body(event).detail?.deadline_reached === true &&
+    (body(event).detail?.missing_actor_ids?.length ?? 0) > 0).length;
 
-  const relational = relationalFacts(events, synthetic);
+  const relational = relationalFacts(store, snapshots);
   const dyads = new Map();
   for (const item of relational.interactions) {
     const value = item.value ?? item, from = value.from ?? value.actor_id, to = value.to ?? value.counterparty_id;
@@ -367,14 +402,16 @@ export function deriveCalibrationMetricFacts({ store, snapshots, configuration, 
     "conflict.mean_battles_per_run": countFact(battles.length),
     "conflict.annihilation_rate": indicatorFact(annihilation),
     "conflict.perpetual_conflict_rate": finalTen.length === 10 ? indicatorFact(perpetual) : metricFact({ numerator: 0, denominator: 0, eligibility: 0, status: METRIC_STATUS.CENSORED, note: "FEWER_THAN_TEN_OBSERVABLE_TURNS" }),
-    "conflict.dominant_action_share": rateFact(dominant, action.acceptedNonWait, "NO_ACCEPTED_NON_WAIT_ACTIONS"),
+    "conflict.dominant_action_share": metricFact({ numerator: dominant, denominator: action.acceptedNonWait,
+      eligibility: action.acceptedNonWait, status: action.acceptedNonWait ? METRIC_STATUS.OBSERVED : METRIC_STATUS.ZERO_OPPORTUNITY,
+      note: action.acceptedNonWait ? null : "NO_ACCEPTED_NON_WAIT_ACTIONS", categoryCounts: Object.fromEntries(action.counts) }),
     "information.median_discovery_turn": conditionalTurnFact(firstDiscovery, "NO_EXTERNAL_POLITY_DISCOVERY"),
     "information.detection_event_rate": rateFact(detectionEvents, detectionEligibleTurns, "NO_ELIGIBLE_MULTI_POLITY_TURNS"),
     "information.early_saturation_rate": indicatorFact(earlySaturation),
     "information.permanent_isolation_rate": indicatorFact(isolatedAt12),
     "bandwidth.action_budget_utilization": rateFact(action.acceptedNonWait, availableSlots, "NO_AVAILABLE_ACTION_SLOTS"),
     "bandwidth.phase_limit_block_rate": rateFact(soleLimitBlocks, eligibleAttempts, "NO_ELIGIBLE_ACTION_ATTEMPTS"),
-    "runtime.deadline_failure_rate": rateFact(deadlineFailures, completedInvocations.length, "NO_MODEL_INVOCATIONS"),
+    "runtime.deadline_failure_rate": rateFact(deadlineFailures, phaseClosures.length, "NO_CONTROLLER_PHASE_OPPORTUNITIES"),
     "relational.median_commitment_opportunities": countFact(relational.commitments.length),
     "relational.median_reciprocity_opportunities": countFact(relational.reciprocity.length),
     "relational.rupture_opportunity_run_rate": indicatorFact(relational.ruptures.length > 0),

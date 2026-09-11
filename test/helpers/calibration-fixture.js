@@ -31,6 +31,7 @@ export function syntheticCanonicalEvidence({ seed = syntheticSeedPanel()[0], tre
   const fallbackWorld = { phases: values["world.configuration.phases"], dynamics: values["world.configuration.dynamics"],
     unitTypes: values["world.configuration.unitTypes"], initialFacilityTypes: values["world.configuration.initialFacilityTypes"] };
   const config = { maxTurns: 20, phases: { actionLimit: 64 }, synthetic: true,
+    calibration_policy_id: "deterministic_synthetic_conformance",
     ...(runtimeConfiguration ? { calibration_parameter_set_hash: runtimeConfiguration.parameter_set_hash,
       effective_configuration_hash: runtimeConfiguration.effective_configuration_hash,
       world_configuration: runtimeConfiguration.effective_configuration } : { world_configuration: fallbackWorld }) };

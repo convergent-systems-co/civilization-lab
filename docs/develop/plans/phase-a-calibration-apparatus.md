@@ -1,6 +1,13 @@
 # Plan — `phase-a-calibration-apparatus`
 
 Bundle: **Implement Phase A calibration execution apparatus**
+
+Completion addendum — 2026-09-11: the fixed eight-role policy package, production
+Phase A adapter, reducer-backed coverage, manifest/attestation, and crash-resumable
+search state are implemented. The distinct post-policy suite passed 848/848 with zero
+skips. Historical unchecked steps below describe the pre-policy execution plan and are
+retained as planning history; they are superseded by this addendum and
+`validation/CALIBRATION_TOOLING_REVIEW.json`.
 Branch: `develop/phase-a-calibration-apparatus`
 Base: `origin/main`
 Spec: [`docs/develop/specs/phase-a-calibration-apparatus.md`](../specs/phase-a-calibration-apparatus.md)
@@ -8,12 +15,37 @@ Planned: 2026-09-10
 
 ---
 
+## Status addendum — 2026-09-11
+
+This plan and its unchecked boxes preserve the original work breakdown; they are not
+the current completion ledger. The worktree subsequently passed a full 823/823,
+zero-failure, zero-skip non-empirical suite before implementation of the newly ratified
+Phase A execution-policy package. That result is the **pre-policy baseline**, not final
+Phase A apparatus acceptance.
+
+The former prohibition on a production adapter is superseded for the current bundle by
+the human-ratified fixed heterogeneous deterministic policy panel. Remaining gates are:
+
+1. implement and version all eight deterministic coverage roles and the frozen balanced
+   assignment algorithm;
+2. ensure policies consume only participant-equivalent authorized projections and never
+   invoke Qwen;
+3. implement the production Phase A adapter and bind its policy-package identity into
+   manifests, attestations, recovery, and resume state;
+4. demonstrate synthetic whole-panel mechanics coverage and repeat the full suite and
+   adversarial review;
+5. land and remotely verify the apparatus without executing empirical calibration.
+
+No checklist item below should be read as authorizing calibration or research execution.
+
 ## Shape of the work
 
-This is **not** greenfield. The worktree already carries an uncommitted implementation whose
-file set matches the bundle footprint one-for-one, and `npm run check` passes against it
-(586 tests, 0 failed, 0 skipped). Per the spec's assumption 2, that work-in-progress is this
-bundle's own output, to be **verified and landed**, not rebuilt.
+This was **not** greenfield when the plan was written. At that planning checkpoint the
+worktree carried an uncommitted implementation whose file set matched the bundle footprint
+one-for-one, and `npm run check` passed with 586 tests, 0 failed, and 0 skipped. That
+historical checkpoint was later superseded by the 823/823 pre-policy baseline described
+above. Per the spec's assumption 2, the work-in-progress remains this bundle's own output,
+to be **verified and landed**, not rebuilt.
 
 So the plan is an adversarial verification sweep, not a construction sequence. Each
 verification task takes one group of acceptance criteria, writes an independent test file
@@ -68,9 +100,11 @@ individually rather than as `schemas/**`, and no two verification tasks share a 
 - Never edit a `*.spec.*` file (`PILOT_0_CALIBRATION_PROTOCOL.spec.json`,
   `PARAMETER_REGISTRY.spec.json`, `PRIMARY_ENDPOINT.spec.json`, `HORIZON_POLICY.spec.json`,
   and siblings). They are read-only for this bundle.
-- Never add an empirical execution path, a default execution adapter, an authorization
-  bypass, or any treatment-arm comparison, effect estimate, or significance computation — in
-  code, tests, docs, or schemas.
+- The historical plan prohibited a production execution adapter. The current ratified
+  decision now requires a fail-closed production Phase A adapter for the fixed deterministic
+  policy package. It still prohibits empirical execution without separate authority,
+  authorization bypasses, Qwen use during initial Phase A, and every treatment-arm
+  comparison, effect estimate, or significance computation.
 - Never widen the search bounds (512 parameter sets, 12 rounds), the 24-seed panel, or the
   20-turn horizon.
 - Tests must be deterministic and must not write outside a temp directory or
@@ -155,7 +189,7 @@ behavior in this task.
 **Steps**
 - [ ] Assert in `test/calibration-binding.test.js` that `src/calibration-runner.js` binds
       implementation commit `8f06baae4cda7d6fbd9d61924b5c615f4a45ba59`, tag `v0.1.0-pilot0`,
-      and protocol version `pilot-0-calibration-1.0.0`, reading the bindings through the
+      and protocol version `pilot-0-calibration-1.1.0`, reading the bindings through the
       module's public surface rather than by regexing the source where possible.
 - [ ] Assert that a **commit mismatch** and, separately, a **protocol-version mismatch** each
       cause `PhaseACalibrationRunner` to fail closed, and that each raises the
@@ -451,8 +485,9 @@ behavior in this task.
       emit a stopping proof: no accepted candidate, an incomplete panel, and a stopping rule
       that has not passed.
 - [ ] Validate an emitted result against `schemas/calibration-result.schema.json` and assert
-      `empirical_authorization` and `confirmatory_authorization` are `false` **by
-      construction** — assert the schema constrains them to `false` (a `const`/`enum`), not
+      `calibration_execution_authorized` names only Phase A execution, while
+      `pilot0_research_authorized` and `confirmatory_authorized` are `false` **by
+      construction** — assert the schema constrains the research fields to `false`, not
       merely that the instance happens to be `false`.
 - [ ] Validate the proposed world configuration against
       `schemas/pilot0-world-configuration.schema.json` and assert `status` is the constant
@@ -487,9 +522,11 @@ behavior in this task.
   exactly as they are unless a criterion proves them wrong.
 
 **Steps**
-- [ ] Assert `node scripts/calibration-cli.js run` **fails closed**: spawn it as a
-      subprocess, assert a non-zero exit code, assert the message names the missing
-      authorization, and assert no world or model execution was started.
+- [ ] Assert `node scripts/calibration-cli.js run` **fails closed without the complete
+      signed Phase A authority and trust package**: spawn it without that package, assert a
+      non-zero exit code, assert the message names the missing authority, and assert no world
+      or model execution was started. With valid authority, it may invoke only the frozen
+      deterministic policy adapter and must never invoke Qwen.
 - [ ] Assert `npm run calibration:plan` prints the frozen search and authorization state,
       exits zero, and starts no world or model execution. Assert the output names the 512
       parameter-set bound, the 12-round bound, the 24-seed panel, and
@@ -497,14 +534,14 @@ behavior in this task.
 - [ ] Assert `npm run calibration:verify -- --archive PATH --public-key PATH --key-id ID`
       verifies a fixture archive against **externally supplied** trust: it succeeds for a
       matching key, and fails for a mismatched key and for a missing `--public-key`.
-- [ ] Assert the execution adapter is **injected by the caller**: constructing
-      `PhaseACalibrationRunner` without an adapter fails, and no module under `src/` or
-      `scripts/` exports or instantiates a default adapter. Scan for the absence and state the
-      scan's scope in a code comment.
-- [ ] Assert **no embedded authorization bypass** exists: scan `src/calibration-runner.js` and
-      `scripts/calibration-cli.js` for any environment variable, flag, or constant that flips
-      `empirical_calibration` to true, and assert none is found. Assert no code path starts
-      world runs, model generation, human sessions, or confirmatory execution.
+- [ ] **Superseded pre-policy check:** the runner formerly required a caller-injected
+      adapter and prohibited a repository production adapter. Replace this with tests that
+      bind the production adapter to the exact frozen policy-package version and prove that
+      unauthorized or mismatched adapters fail closed.
+- [ ] Assert **no embedded authorization bypass** exists: scan the runner, CLI, policy
+      package, and production adapter for any environment variable, flag, or constant that
+      self-authorizes calibration. Assert no path starts Qwen generation, human sessions,
+      Pilot 0 research, or confirmatory execution.
 - [ ] Assert the deterministic synthetic fixture is **software evidence only** and cannot be
       promoted into an empirical archive: attempt the promotion and assert it is rejected with
       a class naming the software-evidence provenance.
@@ -570,8 +607,9 @@ behavior in this task.
       resolve a marker by deleting the assertion.
 - [ ] Fix each confirmed defect in `src/calibration-runner.js` with the **narrowest** change
       that closes it. Never widen the search bounds, the seed panel, or the horizon to make a
-      test pass, and never add an execution path, a default adapter, or an authorization
-      bypass.
+      test pass, and never add an unauthorized execution path, an unbound adapter, or an
+      authorization bypass. The newly required production adapter must remain policy-locked
+      and fail closed.
 - [ ] Un-comment each withheld assertion in its original test file and delete its
       `TODO(T12)` marker. Editing another task's test file is expected here and is the reason
       T12 runs alone in its wave.
@@ -598,15 +636,17 @@ behavior in this task.
 - Documentation and a validation record only. No code change.
 
 **Steps**
-- [ ] Run `npm run check` and capture the authoritative totals: passed, failed, skipped.
-      Criterion 28 requires **zero failures and zero skips**; the total is whatever the tree
-      produces after T1–T12 added test files, so it will exceed the 586 baseline.
-- [ ] Fix the known inconsistency: `README.md` line 9 states "557 passed" while the tree
-      produces a different number. Replace it with the captured total. Search `README.md` for
-      any other stale count and fix each.
-- [ ] Update `validation/CALIBRATION_TOOLING_REVIEW.json` `test_summary` (currently
-      `{"total":586,"passed":586,"failed":0,"skipped":0}`) to the captured totals, keeping the
-      existing field shape.
+- [ ] After the policy package and production adapter land, run `npm run check` and capture
+      the new authoritative totals. Criterion 28 requires **zero failures and zero skips**.
+      The verified 823/823 count is the pre-policy baseline and must not be presented as the
+      completed policy/adapter result.
+- [ ] Update `README.md` from the 823-test pre-policy baseline only after the post-policy
+      full-suite total exists. Preserve the immutable Pilot 0 baseline's historical 557-test
+      result where it is explicitly identified as that baseline.
+- [ ] Add the post-policy full-suite result to
+      `validation/CALIBRATION_TOOLING_REVIEW.json` without erasing its historical focused
+      runs or the 823/823 pre-policy baseline. Mark the policy/adapter gates complete only
+      after their dedicated conformance and adversarial checks pass.
 - [ ] Confirm the review record names all **five** specialist domains — treatment leakage,
       search integrity, provenance and attestation, recovery, research validity — and add any
       that is missing. Record the verification sweep T2–T11 performed under the matching

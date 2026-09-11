@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { canonicalize, sha256 } from "../src/core.js";
 import { SignedArchive, archiveKeyId } from "../src/archive.js";
 import { EvidenceStore, loadEvidence } from "../src/evidence.js";
-import { CalibrationArchive, assertCalibrationEvidenceTrust, assertCalibrationPhaseBudgetEvidence, collectCalibrationObservations } from "../src/calibration-runner.js";
+import { CalibrationArchive, assertCalibrationEvidenceTrust, assertCalibrationPhaseBudgetEvidence, collectCalibrationObservations, verifyAdapterExecutionReceipt } from "../src/calibration-runner.js";
 import { calibrationProtocol } from "../src/calibration.js";
 import { syntheticCanonicalEvidence, syntheticAttestationKeys } from "./helpers/calibration-fixture.js";
 
@@ -57,6 +57,28 @@ test("archive never trusts an adapter-supplied evidence key or unsigned head rec
   assert.throws(() => archive.collectionOptions(f.bundle, { evidence_head_receipt: receipt }), /head receipt signature/);
   receipt.signature = sign(null, Buffer.from(canonicalize(body)), headPair.privateKey).toString("base64");
   assert.throws(() => archive.collectionOptions(f.bundle, { evidence_head_receipt: receipt }), /authorized adapter executable/);
+});
+
+test("adapter execution receipt binds neutral policy, request, vector and evidence", () => {
+  const bundle = syntheticCanonicalEvidence(), signer = generateKeyPairSync("ed25519");
+  const authority = { headPublicKey: signer.publicKey.export({ type: "spki", format: "pem" }), policyManifestHash: "a".repeat(64),
+    adapterHash: "b".repeat(64), executableHash: "c".repeat(64) };
+  const executionRequest = { schema_version: "phase-a-execution-request-1.0.0", seed: calibrationProtocol().seed_panel.seeds[0] };
+  const context = { expected_seed: executionRequest.seed, expected_parameter_set_hash: "d".repeat(64),
+    execution_request: executionRequest, execution_request_hash: sha256(executionRequest),
+    adapter_package_digest: authority.executableHash };
+  const body = { version: "phase-a-adapter-execution-receipt-1.0.0", mode: "EMPIRICAL_CALIBRATION",
+    run_id: bundle.run_id, seed: context.expected_seed, parameter_set_hash: context.expected_parameter_set_hash,
+    execution_request_hash: context.execution_request_hash, policy_manifest_hash: authority.policyManifestHash,
+    adapter_hash: authority.adapterHash, adapter_executable_hash: authority.executableHash,
+    adapter_package_digest: authority.executableHash, evidence_hash: sha256(bundle) };
+  context.adapter_execution_receipt = { body, signature: sign(null, Buffer.from(canonicalize(body)), signer.privateKey).toString("base64") };
+  assert.deepEqual(verifyAdapterExecutionReceipt(bundle, context, authority), {
+    execution_request_hash: context.execution_request_hash, policy_manifest_hash: authority.policyManifestHash });
+  for (const field of ["policy_manifest_hash", "execution_request_hash", "adapter_package_digest", "evidence_hash"]) {
+    const altered = structuredClone(context); altered.adapter_execution_receipt.body[field] = "f".repeat(64);
+    assert.throws(() => verifyAdapterExecutionReceipt(bundle, altered, authority), /receipt binding/);
+  }
 });
 
 test("canonical phase evidence must bind the calibrated per-phase overrides", () => {

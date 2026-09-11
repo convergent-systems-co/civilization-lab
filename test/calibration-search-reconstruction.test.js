@@ -43,20 +43,23 @@ test("clean-room verification reconstructs every candidate and selected result f
 });
 
 for (const [name, mutate, rejection] of [
-  ["skipped candidate index", c => { c.candidate_index++; }, /skipped\/substituted/],
-  ["wrong search round", c => { c.round++; }, /skipped\/substituted/],
-  ["forged maximin score", c => { c.assessment.selection_score.minimum_normalized_boundary_distance += 1; }, /assessment\/score/],
-  ["forged seed robustness", c => { c.assessment.selection_score.worst_seed_metric_pass_fraction = 0; }, /assessment\/score/],
-  ["forged acceptance", c => { c.assessment.accepted = !c.assessment.accepted; }, /assessment\/score/]
+  ["skipped candidate index", c => { c.candidate_index++; }, /skipped\/substituted|retained assessments/],
+  ["wrong search round", c => { c.round++; }, /skipped\/substituted|retained assessments/],
+  ["forged maximin score", c => { c.assessment.selection_score.minimum_normalized_boundary_distance += 1; }, /assessment\/score|retained assessments/],
+  ["forged seed robustness", c => { c.assessment.selection_score.worst_seed_metric_pass_fraction = 0; }, /assessment\/score|retained assessments/],
+  ["forged acceptance", c => { c.assessment.accepted = !c.assessment.accepted; }, /assessment\/score|retained assessments/]
 ]) test(`valid signatures cannot authorize ${name}`, async () => {
   const archive = await copyArchive(), index = archive.state.candidates.at(-1), candidate = await archive.candidate(index.parameter_set_hash);
   mutate(candidate); candidate.attestation = attestCalibrationAttempt(candidate, trust);
   await writeFile(join(archive.directory, index.path), canonicalize(candidate) + "\n");
-  await archive.update(state => {
+  await archive._exclusive(async () => {
+    await archive._loadLocked();
+    const expectedHead = archive.head.digest;
+    const state = structuredClone(archive.state);
     state.candidates.find(c => c.parameter_set_hash === candidate.parameter_set_hash).candidate_hash = sha256(candidate);
     state.assessments = state.assessments.map(a => a.parameter_set_hash === candidate.parameter_set_hash
       ? { ...candidate.assessment, candidate_attestation_hash: sha256(candidate) } : a);
-    return state;
+    await archive._publish(state, expectedHead);
   });
   await assert.rejects(archive.verify({ trustedKeys: keys }), rejection);
 });
@@ -93,10 +96,33 @@ test("partial-round resume restores incumbent, admission flag and cursor without
   }).run({ maximumCandidates: 2 }), /synthetic partial-round crash/);
   const partial = await CalibrationArchive.open(directory, trust);
   assert.equal(calls, 24);
+  const corruptionRoot = await mkdtemp(join(tmpdir(), "calibration-corrupt-resume-"));
+  const corruptedDirectory = join(corruptionRoot, "archive");
+  await cp(directory, corruptedDirectory, { recursive: true });
+  const corruptArchive = await CalibrationArchive.open(corruptedDirectory, trust);
+  const corruptManifest = await corruptArchive.manifest(corruptArchive.state.attempts[0].attempt_id);
+  await writeFile(join(corruptedDirectory, corruptManifest.metric_artifact), canonicalize({ fabricated: true }) + "\n");
+  await assert.rejects(runner(corruptedDirectory).run({ maximumCandidates: 2 }),
+    /recovery attempt artifact hash mismatch|metric artifact does not regenerate/,
+  "a signed running search head cannot make a fabricated metric artifact influence resume");
   const restored = reconstructCalibrationSearch(await candidates(partial), { maximumCandidates: 2 });
   assert.equal(restored.round_improved, true);
   assert.deepEqual(restored.search_cursor, { round: 0, operation_index: 1, candidate_index: 1 });
   assert.equal(restored.incumbent_parameter_set_hash, partial.state.incumbent_parameter_set_hash);
+  const forgedDirectory = await mkdtemp(join(tmpdir(), "calibration-running-forgery-"));
+  await cp(directory, forgedDirectory, { recursive: true });
+  const forged = await CalibrationArchive.open(forgedDirectory, trust), index = forged.state.candidates.at(-1);
+  const altered = await forged.candidate(index.parameter_set_hash);
+  altered.assessment.selection_score.minimum_normalized_boundary_distance += 1;
+  await writeFile(join(forged.directory, index.path), canonicalize(altered) + "\n");
+  await forged._exclusive(async () => {
+    await forged._loadLocked(); const expectedHead = forged.head.digest, state = structuredClone(forged.state);
+    state.candidates.find(item => item.parameter_set_hash === index.parameter_set_hash).candidate_hash = sha256(altered);
+    state.assessments = state.assessments.map(item => item.parameter_set_hash === index.parameter_set_hash ? altered.assessment : item);
+    await forged._publish(state, expectedHead);
+  });
+  await assert.rejects(runner(forgedDirectory).run({ maximumCandidates: 2 }), /retained candidates|retained assessments|attestation invalid/,
+    "RUNNING recovery must not adopt an archive-signer-modified candidate before independent attestation verification");
   const result = await runner(directory, { executor: args => { calls++; return execute(args); } }).run({ maximumCandidates: 2 });
   assert.equal(calls, 48, "completed seed work must not repeat");
   const resumed = await CalibrationArchive.open(directory, trust);

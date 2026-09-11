@@ -4,7 +4,7 @@ Status: **frozen preparation; empirical calibration is not authorized.**
 
 The authoritative machine contract is
 `PILOT_0_CALIBRATION_PROTOCOL.spec.json` version
-`pilot-0-calibration-1.0.0`. It is bound to the validated implementation baseline
+`pilot-0-calibration-1.1.0`. It is bound to the validated implementation baseline
 tag `v0.1.0-pilot0` (commit
 `8f06baae4cda7d6fbd9d61924b5c615f4a45ba59`). Existing world and model values
 remain `PROVISIONAL`; this protocol does not promote them to calibrated values.

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/phase-a-execution-binding.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "calibration_run_id", "attempt_id", "execution_intent_id",
+    "execution_request_hash", "execution_mode", "synthetic", "calibration_parameter_set_hash",
+    "effective_configuration_hash", "protocol_hash", "adapter_version", "adapter_package_hash",
+    "policy_package_id", "policy_package_version", "policy_package_hash", "assignment_algorithm",
+    "assignment", "assignment_hash", "calibration_policy_id", "policy_manifest_hash",
+    "model_runtime_lock_hash", "model_use_declared", "objective_terminal_predicates", "max_turns", "seed"
+  ],
+  "properties": {
+    "schema_version": {"const": "phase-a-execution-binding-1.0.0"},
+    "calibration_run_id": {"type": "string", "minLength": 1},
+    "attempt_id": {"type": "string", "minLength": 1},
+    "execution_intent_id": {"type": "string", "minLength": 1},
+    "execution_request_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "execution_mode": {"enum": ["SYNTHETIC_CONFORMANCE", "EMPIRICAL_CALIBRATION"]},
+    "synthetic": {"type": "boolean"},
+    "calibration_parameter_set_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "effective_configuration_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "protocol_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "adapter_version": {"const": "phase-a-production-adapter-1.0.0"},
+    "adapter_package_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "policy_package_id": {"const": "civilizationlab-phase-a-coverage-panel"},
+    "policy_package_version": {"const": "phase-a-policy-panel-1.0.0"},
+    "policy_package_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "assignment_algorithm": {"const": "BALANCED_CYCLIC_ROLE_ROTATION_V1"},
+    "assignment": {"type": "object", "additionalProperties": {"type": "string"}},
+    "assignment_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "calibration_policy_id": {"const": "civilizationlab-phase-a-coverage-panel"},
+    "policy_manifest_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "model_runtime_lock_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "model_use_declared": {"const": false},
+    "objective_terminal_predicates": {"type": "array", "uniqueItems": true, "items": {"enum": ["insufficient_surviving_distinct_participants", "all_remaining_permanently_action_incapable"]}},
+    "max_turns": {"const": 20},
+    "seed": {"type": "string", "minLength": 1}
+  }
+}

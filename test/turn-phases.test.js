@@ -70,7 +70,9 @@ test('phase order validates before commit and preserves the reducer turn increme
   const endSnapshot = events.find(e => e.event_type === 'SnapshotCreated' && e.phase === 'snapshot');
   const archive = events.find(e => e.event_type === 'WorldTransition' && e.payload.mechanic === 'turn_memory_archive');
   assert.ok(endSnapshot.sequence > archive.sequence); assert.equal(endSnapshot.turn, 0); assert.equal(endSnapshot.payload.reducer_turn, 1);
-  assert.equal(f.world.snapshots.length, 2, 'reducer snapshot retained alongside later lifecycle snapshot'); f.world.evidence.verify();
+  assert.equal(f.world.snapshots.length, 1, 'full lifecycle publishes exactly one authoritative post-memory snapshot');
+  assert.equal(events.filter(event => event.event_type === 'SnapshotCreated').length, 1);
+  assert.equal(endSnapshot.payload.snapshot_class, 'POST_MEMORY_LIFECYCLE'); f.world.evidence.verify();
 });
 
 function commandFixture(name) {

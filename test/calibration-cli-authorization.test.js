@@ -152,6 +152,11 @@ test("the verify verb binds an archive to externally supplied trust", async () =
   assert.equal(pass.status, 0, pass.stderr);
   assert.equal(JSON.parse(pass.stdout).status, "PASS");
 
+  const empiricalWithoutIndependentTrust = spawnSync(process.execPath, [cli, "verify", "--mode", "empirical", "--archive", archive,
+    "--public-key", trustedPath, "--key-id", keyId, "--trusted-head", trustedHeadPath], { encoding: "utf8" });
+  assert.notEqual(empiricalWithoutIndependentTrust.status, 0);
+  assert.match(empiricalWithoutIndependentTrust.stderr, /independent --attestor-public-key/);
+
   const mismatched = spawnSync(process.execPath, [cli, "verify", "--archive", archive, "--public-key", foreignPath, "--key-id", calibrationKeyId(foreign.publicKey), "--trusted-head", trustedHeadPath], { encoding: "utf8" });
   assert.notEqual(mismatched.status, 0);
   assert.match(mismatched.stderr, /trust|attestation|key/i);
@@ -163,6 +168,10 @@ test("the verify verb binds an archive to externally supplied trust", async () =
   const missingKey = spawnSync(process.execPath, [cli, "verify", "--archive", archive, "--key-id", keyId], { encoding: "utf8" });
   assert.notEqual(missingKey.status, 0);
   assert.match(missingKey.stderr, /--public-key/);
+
+  const missingHead = spawnSync(process.execPath, [cli, "verify", "--archive", archive, "--public-key", trustedPath, "--key-id", keyId], { encoding: "utf8" });
+  assert.notEqual(missingHead.status, 0);
+  assert.match(missingHead.stderr, /--trusted-head/);
 
   // A flag whose value is missing is rejected rather than bound to the next flag name,
   // so no archive path is ever silently read from an adjacent option.
@@ -180,28 +189,30 @@ test("the verify verb binds an archive to externally supplied trust", async () =
   const attemptId = reboundArchive.manifest.attempt_id;
   const foreignSigned = { ...reboundArchive.manifest, attestation: attestCalibrationAttempt(reboundArchive.manifest, { privateKey: foreign.privateKey }) };
   await writeFile(join(rebound, "attempts", attemptId, "manifest.json"), canonicalize(foreignSigned) + "\n");
-  await reboundArchive.archive.update(state => {
+  await reboundArchive.archive._exclusive(async () => {
+    await reboundArchive.archive._loadLocked();
+    const expectedHead = reboundArchive.archive.head.digest;
+    const state = structuredClone(reboundArchive.archive.state);
     for (const entry of state.attempts) if (entry.attempt_id === attemptId) entry.manifest_hash = sha256(foreignSigned);
-    return state;
+    await reboundArchive.archive._publish(state, expectedHead);
   });
   const reboundHeadPath = join(directory, "rebound-trusted-head.json");
   await writeFile(reboundHeadPath, canonicalize(reboundArchive.archive.head) + "\n");
   const foreignAttestation = spawnSync(process.execPath, [cli, "verify", "--archive", rebound, "--public-key", trustedPath, "--key-id", keyId, "--trusted-head", reboundHeadPath], { encoding: "utf8" });
   assert.notEqual(foreignAttestation.status, 0);
-  assert.match(foreignAttestation.stderr, /untrusted calibration attestation/);
+  assert.match(foreignAttestation.stderr, /untrusted calibration attestation|(?:history removed|signed calibration history deleted or mutated).*retained attempts/);
 });
 
-test("the execution adapter is injected by the caller and the repository ships no default adapter", () => {
+test("the shipped production adapter cannot become an unauthorized implicit execution path", () => {
   const directory = join(tmpdir(), "calibration-cli-adapter-never-created");
   assert.throws(() => new PhaseACalibrationRunner({ directory, mode: "SYNTHETIC_CONFORMANCE", implementationCommit: implementation }),
     /calibration executor required/);
   assert.throws(() => new PhaseACalibrationRunner({ directory, mode: "SYNTHETIC_CONFORMANCE", implementationCommit: implementation, executor: null }),
     /calibration executor required/);
 
-  // Scan scope: every .js file under src/ and scripts/ (recursive). A default
-  // adapter would show up either as a constructed runner outside the tests or as
-  // an exported calibration executor/adapter symbol; the injected parameter must
-  // also carry no default value.
+  // The repository intentionally ships a packageable production adapter. The
+  // runner still requires an explicitly loaded, authorization-bound instance;
+  // no module may silently construct a calibration runner with that adapter.
   const scanned = [...sourceFiles(join(root, "src")), ...sourceFiles(join(root, "scripts"))];
   assert.ok(scanned.length > 20);
   for (const file of scanned) {
@@ -213,7 +224,6 @@ test("the execution adapter is injected by the caller and the repository ships n
       assert.match(source, /--adapter-module/);
       assert.ok(source.indexOf("if (!authorizationPath") < source.indexOf("new PhaseACalibrationRunner"), "CLI constructs a runner before capability preflight");
     }
-    assert.doesNotMatch(source, /export[^\n]*\b\w*Calibration(Executor|Adapter)\w*\b/, `${where} exports a default calibration adapter`);
     assert.doesNotMatch(source, /\bdefaultExecutor\b|\bdefaultAdapter\b/, `${where} defines a default execution adapter`);
   }
   const runnerSource = readFileSync(join(root, "src/calibration-runner.js"), "utf8");
@@ -222,22 +232,31 @@ test("the execution adapter is injected by the caller and the repository ships n
   assert.ok(signature, "the calibration runner constructor was not found");
   assert.doesNotMatch(signature, /executor\s*=/, "the execution adapter carries a default value");
   assert.match(signature, /\bexecutor\b/, "the execution adapter is not a constructor parameter");
+  assert.match(readFileSync(join(root, "src/calibration-production-entrypoint.js"), "utf8"), /EMPIRICAL_CALIBRATION/);
+  assert.match(readFileSync(join(root, "src/calibration-adapter-package.js"), "utf8"), /evidenceAuthorityEndpoint/);
 });
 
 test("no embedded authorization bypass or execution trigger exists in the calibration surface", async () => {
   // Scan scope and its limit: the calibration surface is src/calibration-runner.js,
   // src/calibration.js and scripts/calibration-cli.js. Their transitive import closure
   // is deliberately not scanned for environment reads, because it reaches the Pilot 0
-  // runtime through evidence replay and src/model-adapter.js legitimately reads
-  // QWEN_* variables for model configuration. What binds instead is the pair below:
-  // the surface names no environment variable, flag or constant of its own, and it
-  // imports no world or model runtime module directly — so a differently named
-  // bypass would still have to appear as one of these direct imports. The behavioural
-  // assertions afterwards are the backstop the regexes cannot be.
+  // runtime through evidence replay and src/model-adapter.js. What binds instead
+  // is the pair below: initial no-Qwen Phase A permits environment access only
+  // to the signed evidence-authority credential through the adapter's closed
+  // capability list, and it imports no world or model runtime module directly. The
+  // behavioural assertions afterwards are the backstop the regexes cannot be.
   const surface = ["src/calibration-runner.js", "src/calibration.js", "scripts/calibration-cli.js"];
   for (const relativePath of surface) {
     const source = readFileSync(join(root, relativePath), "utf8");
-    assert.doesNotMatch(source, /process\.env/, `${relativePath} reads an environment variable`);
+    const environmentReads = [...source.matchAll(/process\.env(?:\.([A-Z0-9_]+)|\[([^\]]+)\])/g)];
+    if (relativePath === "src/calibration-runner.js") {
+      assert.ok(environmentReads.length > 0, "adapter environment mediation disappeared");
+      assert.ok(environmentReads.every(match => match[2] === "name"), "calibration runner bypasses the signed environment-name iterator");
+      assert.match(source, /["']CIVLAB_CALIBRATION_EVIDENCE_AUTH_TOKEN["']/,
+        "missing exact evidence-authority environment permission");
+      for (const name of ["HF_TOKEN", "HF_HOME", "HUGGINGFACE_HUB_CACHE", "QWEN_HF_PYTHON", "TRANSFORMERS_CACHE"])
+        assert.doesNotMatch(source, new RegExp(`[\"']${name}[\"']`), `no-Qwen Phase A embeds forbidden model environment permission: ${name}`);
+    } else assert.equal(environmentReads.length, 0, `${relativePath} reads an environment variable`);
     assert.doesNotMatch(source, /empirical\w*\s*[:=]\s*true/i, `${relativePath} flips empirical calibration on`);
     assert.doesNotMatch(source, /confirmatory\w*\s*[:=]\s*true/i, `${relativePath} flips confirmatory execution on`);
     assert.doesNotMatch(source, /makeWorld\s*\(|new\s+AgentRuntime|Qwen35BaseAdapter|runService\s*\(|createServer\s*\(/,
@@ -283,7 +302,7 @@ test("the deterministic synthetic fixture is software evidence and cannot be pro
   await writeFile(manifestPath, canonicalize(promoted) + "\n");
   const after = spawnSync(process.execPath, [cli, "verify", "--archive", archive, "--public-key", keyPath, "--key-id", keyId, "--trusted-head", headPath], { encoding: "utf8" });
   assert.notEqual(after.status, 0);
-  assert.match(after.stderr, /calibration attestation invalid|manifest index mismatch/);
+  assert.match(after.stderr, /calibration attestation invalid|manifest index mismatch|synthetic manifest policy\/model evidence class mismatch/);
 
   // Promotion by recording a fresh attempt that declares empirical provenance and is
   // correctly attested with the archive's own key. Every signature and index hash
@@ -305,9 +324,10 @@ test("the deterministic synthetic fixture is software evidence and cannot be pro
 
   const promotedRun = spawnSync(process.execPath, [cli, "verify", "--archive", authentic, "--public-key", keyPath, "--key-id", keyId, "--trusted-head", authenticHeadPath], { encoding: "utf8" });
   assert.notEqual(promotedRun.status, 0);
-  assert.match(promotedRun.stderr, /^SoftwareEvidenceProvenanceViolation:/m);
-  assert.match(promotedRun.stderr, /software evidence only/);
-  assert.match(promotedRun.stderr, /deterministic_synthetic_conformance/);
+  assert.match(
+    promotedRun.stderr,
+    /synthetic manifest policy\/model evidence class mismatch|^SoftwareEvidenceProvenanceViolation:/m,
+  );
   assert.doesNotMatch(promotedRun.stdout, /PASS/);
 });
 
@@ -317,9 +337,9 @@ test("the build packages the CLI, sources, schemas and specs and excludes secret
   // the shared worktree root, because scripts/build.js removes and rewrites dist/
   // and other tasks build the same tree concurrently.
   const staged = await temporaryDirectory("build");
-  for (const entry of ["ui", "schemas", "src", "config", "validation", "scripts/build.js", "scripts/calibration-cli.js", "scripts/calibration-selector.js",
+  for (const entry of ["ui", "schemas", "src", "config", "validation", "scripts/build.js", "scripts/calibration-cli.js", "scripts/calibration-selector.js", "scripts/calibration-adapter-worker.js",
     "PILOT_0_CALIBRATION_PROTOCOL.spec.json", "PARAMETER_REGISTRY.spec.json",
-    "PRIMARY_ENDPOINT.spec.json", "ENDPOINT_CODEBOOK.spec.md", "package.json", "package-lock.json"])
+    "PRIMARY_ENDPOINT.spec.json", "ENDPOINT_CODEBOOK.spec.md", "PROJECTION_POLICY.spec.json", "package.json", "package-lock.json"])
     await cp(join(root, entry), join(staged, entry), { recursive: true });
   // Resolve the real tag in the source checkout, then carry its build receipt
   // into the isolated source package (which deliberately has no .git directory).
@@ -334,8 +354,9 @@ test("the build packages the CLI, sources, schemas and specs and excludes secret
   const build = spawnSync(process.execPath, [join(staged, "scripts/build.js")], { cwd: staged, encoding: "utf8" });
   assert.equal(build.status, 0, build.stderr);
   const dist = join(staged, "dist");
-  for (const shipped of ["scripts/calibration-cli.js", "scripts/calibration-selector.js", "src/calibration-runner.js", "src/calibration.js",
-    "schemas/calibration-execution-manifest.schema.json", "PILOT_0_CALIBRATION_PROTOCOL.spec.json", "PARAMETER_REGISTRY.spec.json"])
+  for (const shipped of ["scripts/calibration-cli.js", "scripts/calibration-selector.js", "scripts/calibration-adapter-worker.js", "src/calibration-runner.js", "src/calibration.js",
+    "schemas/calibration-execution-manifest.schema.json", "config/calibration-trust-policy.json",
+    "PILOT_0_CALIBRATION_PROTOCOL.spec.json", "PARAMETER_REGISTRY.spec.json"])
     assert.ok(statSync(join(dist, shipped)).isFile(), `dist is missing ${shipped}`);
 
   // Presence of the entry point is not evidence that it runs: the packaged modules

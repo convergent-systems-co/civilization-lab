@@ -52,12 +52,13 @@ function validateConfiguration(config) {
   }
   numbers(config);
 }
-export function makeWorld({runId=`run-${randomUUID()}`,seed=`seed-${randomUUID()}`,config=PILOT_0_CONFIG,evidence=new EvidenceStore(runId)}={}) {
+export function makeWorld({runId=`run-${randomUUID()}`,seed=`seed-${randomUUID()}`,config=PILOT_0_CONFIG,evidence=new EvidenceStore(runId),executionBinding=null}={}) {
   validateConfiguration(config);assert(evidence.runId===runId,'world evidence run mismatch');
   const world=bind({runId,seed,config:clone(config),turn:0,phase:'actions',polities:{},hexes:{},territories:{},facilities:{},channels:{},
     unaffiliatedPopulation:[],neutralUnits:[],
     evidence,rng:new WorldRng(seed,evidence,{deferred:true}),actionTypes:clone(ACTION_TYPES),lastTurnCommit:null,snapshots:[],
-    committedRecords:new Map(),resolvedCommits:new Set(),terminal:false,terminationReason:null});
+    committedRecords:new Map(),resolvedCommits:new Set(),terminal:false,terminationReason:null,
+    objectiveTerminalPredicates:clone(executionBinding?.objective_terminal_predicates??[])});
   generateMap(world);
   for(const start of world.starts) {
     const profile=config.startingProfiles[start.profile],id=start.actorId,territoryId=world.hexes[start.id].territory_id;
@@ -87,10 +88,13 @@ export function makeWorld({runId=`run-${randomUUID()}`,seed=`seed-${randomUUID()
   const startValidation=validateWorldStarts(world);assertWorldState(world);
   for(const p of sortedActors(world))assert(p.knowledge.length===1,'starting placement reveals another polity');
   const initialStateRef=evidence.putPayload(authoritativeState(world),'authoritative_research');
+  const executionBindingRef=executionBinding===null?null:evidence.putPayload(executionBinding,'calibration_execution_binding');
   evidence.append({eventType:'RunCreated',turn:0,phase:'setup',participants:Object.keys(world.polities),payload:{
     run_id:runId,config_hash:sha256(config),configuration_ref:evidence.putPayload(world.config,'configuration'),
     parameter_registry_ref:evidence.putPayload(parameterRegistry(world.config),'parameter_registry'),initial_state_ref:initialStateRef,
-    engine_version:'pilot-0.2',world_mechanics_version:'world-v2',seed,start_validation_ref:evidence.putPayload(startValidation,'nonempirical_world_constraints')
+    engine_version:'pilot-0.2',world_mechanics_version:'world-v2',seed,start_validation_ref:evidence.putPayload(startValidation,'nonempirical_world_constraints'),
+    ...(executionBindingRef?{calibration_execution_binding_ref:executionBindingRef,calibration_execution_binding_hash:sha256(executionBinding),
+      calibration_policy_package_hash:executionBinding.policy_package_hash,calibration_policy_package_version:executionBinding.policy_package_version}: {})
   }});
   // Generation draws are canonical after RunCreated so existing replay can discover genesis.
   world.rng.flush();return world;
@@ -135,7 +139,16 @@ function stagingWorld(world) {
   stage.rng.draws=new Map([...world.rng.draws].map(([id,r])=>[id,clone(r)]));stage.rng.eventRefs=new Map(world.rng.eventRefs);
   return stage;
 }
-export function resolveTurn(world,committed,{fault=()=>{}}={}) {
+export function appendTerminalDisposition(world,turn,{causationIds=[]}={}) {
+  const allowed=new Set(['pilot_cap','insufficient_surviving_distinct_participants','all_remaining_permanently_action_incapable']);
+  assert(world.terminal&&allowed.has(world.terminationReason),'objective terminal disposition requires terminal world');
+  assert(!world.evidence.events.some(event=>event.event_type==='RunDisposition'),'duplicate run disposition');
+  return world.evidence.append({eventType:'RunDisposition',turn,phase:'archive',causality:{causation_ids:[...causationIds]},payload:{schema_version:'1.0.0',run_id:world.runId,execution_status:'complete',
+    evidence_validity:{canonical_record_accurate:true},experimental_validity:{confirmatory_eligible:false},endpoint_eligibility:{primary_confirmatory:false},
+    security_eligibility:{security_analysis_eligible:true},exploratory_only:true,replacement_policy:{reason:world.terminationReason},evidence_completeness:{status:'complete'}}});
+}
+export const appendPilotCapDisposition=appendTerminalDisposition;
+export function resolveTurn(world,committed,{fault=()=>{},deferDisposition=false,emitReducerSnapshot=true}={}) {
   assert(committed?.immutable_after_commit,'cannot resolve mutable turn');
   const sealed=world.committedRecords?.get(committed.turn_committed_id);
   assert(sealed && sha256(sealed)===sha256(committed),'commit is not the sealed canonical record');
@@ -154,19 +167,21 @@ export function resolveTurn(world,committed,{fault=()=>{}}={}) {
   };
   stage.lastTurnCommit=clone(committed);resolveApparatus(stage,committed);assertWorldState(stage);
   const resolvedTurn=stage.turn;
-  if(resolvedTurn+1>=stage.config.maxTurns) {
+  const surviving=Object.values(stage.polities).filter(polity=>polity.alive!==false);
+  if(stage.objectiveTerminalPredicates?.includes('insufficient_surviving_distinct_participants')&&surviving.length<2) {
+    stage.terminal=true;stage.terminationReason='insufficient_surviving_distinct_participants';
+  } else if(stage.objectiveTerminalPredicates?.includes('all_remaining_permanently_action_incapable')&&
+    surviving.length>0&&surviving.every(polity=>polity.permanently_action_incapable===true)) {
+    stage.terminal=true;stage.terminationReason='all_remaining_permanently_action_incapable';
+  } else if(resolvedTurn+1>=stage.config.maxTurns) {
     stage.terminal=true;stage.terminationReason='pilot_cap';
   }
   stage.turn=resolvedTurn+1;stage.phase='actions';
   const state=authoritativeState(stage),stateRef=stage.evidence.putPayload(state,'authoritative_research');
-  const snapshot=stage.evidence.append({eventType:'SnapshotCreated',turn:resolvedTurn,phase:'archive',payload:{run_id:stage.runId,turn:resolvedTurn,state_ref:stateRef,state_hash:sha256(state),authoritative:true}});
-  stage.evidence.append({eventType:'TurnResolved',turn:resolvedTurn,phase:'resolve',causality:{causation_ids:[committed.commit_event_id,snapshot.event_id]},payload:{turn_committed_id:committed.turn_committed_id,resulting_state_hash:sha256(state),authoritative_state_ref:stateRef,published_turn:stage.turn,published_phase:stage.phase}});
-  stage.snapshots.push({turn:resolvedTurn,state,state_hash:sha256(state)});stage.resolvedCommits.add(committed.turn_committed_id);
-  if(stage.terminal) {
-    stage.evidence.append({eventType:'RunDisposition',turn:resolvedTurn,phase:'archive',payload:{schema_version:'1.0.0',run_id:stage.runId,execution_status:'complete',
-      evidence_validity:{canonical_record_accurate:true},experimental_validity:{confirmatory_eligible:false},endpoint_eligibility:{primary_confirmatory:false},
-      security_eligibility:{security_analysis_eligible:true},exploratory_only:true,replacement_policy:{reason:'pilot_cap'},evidence_completeness:{status:'complete'}}});
-  }
+  const snapshot=emitReducerSnapshot?stage.evidence.append({eventType:'SnapshotCreated',turn:resolvedTurn,phase:'archive',payload:{run_id:stage.runId,turn:resolvedTurn,state_ref:stateRef,state_hash:sha256(state),authoritative:true,snapshot_class:'WORLD_REDUCER'}}):null;
+  const resolved=stage.evidence.append({eventType:'TurnResolved',turn:resolvedTurn,phase:'resolve',causality:{causation_ids:[committed.commit_event_id,...(snapshot?[snapshot.event_id]:[])]},payload:{turn_committed_id:committed.turn_committed_id,resulting_state_hash:sha256(state),authoritative_state_ref:stateRef,published_turn:stage.turn,published_phase:stage.phase}});
+  if(snapshot)stage.snapshots.push({turn:resolvedTurn,state,state_hash:sha256(state)});stage.resolvedCommits.add(committed.turn_committed_id);
+  if(stage.terminal&&!deferDisposition)appendTerminalDisposition(stage,resolvedTurn,{causationIds:[snapshot?.event_id??resolved.event_id]});
   fault('before_publish',{turn:world.turn,state_hash:stage.stateHash(),event_head:stage.evidence.previousHash});
   const evidence=world.evidence;evidence.events=stage.evidence.events;evidence.payloads=stage.evidence.payloads;evidence.previousHash=stage.evidence.previousHash;
   Object.assign(world,stage,{evidence});world.rng.worldEvidence=evidence;bind(world);

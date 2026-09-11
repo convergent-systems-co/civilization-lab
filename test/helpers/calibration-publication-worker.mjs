@@ -1,5 +1,6 @@
 import { CalibrationArchive, PhaseACalibrationRunner } from "../../src/calibration-runner.js";
 import { syntheticAttestationKeys } from "./calibration-fixture.js";
+import { sha256 } from "../../src/core.js";
 
 const [mode, directory, point, kind] = process.argv.slice(2);
 const trust = syntheticAttestationKeys();
@@ -7,13 +8,10 @@ if (mode === "publish") {
   const archive = await CalibrationArchive.open(directory, trust);
   archive.trust.fault = async stage => { if (stage === point) process.kill(process.pid, "SIGKILL"); };
   const next = structuredClone(archive.state);
-  let path;
-  if (["evidence", "attempt", "candidate"].includes(kind)) {
-    path = `evidence/transport-${kind}.json`;
-    next.executions.push({ key: `transport-${kind}`, path });
-  }
-  if (kind === "result") path = "CALIBRATION_RESULT.json";
-  if (kind === "configuration") path = "PILOT_0_WORLD_CONFIGURATION.json";
+  const path = `evidence/transport-${kind}.json`;
+  const key = `transport-${kind}`, request = { synthetic_transport_fixture: true, kind };
+  next.execution_intents.push({ key, attempt_id: key, request, request_hash: sha256(request), status: "EVIDENCE_PERSISTED" });
+  next.executions.push({ key, attempt_id: key, path });
   // These are publication-transport fixtures, never admissible run evidence.
   await archive._exclusive(() => archive._publish(next, archive.head.digest, [{ path, value: { synthetic_transport_fixture: true, kind } }]));
 } else if (mode === "hold") {

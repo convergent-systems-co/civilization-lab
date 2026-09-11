@@ -1,9 +1,27 @@
 # CivilizationLab specification-closure register
 
-Status: **Historical Pilot 0 closure decisions remain ratified. Implementation has
-exposed narrowly scoped boundaries recorded in IMPLEMENTATION_BLOCKERS.md; full
-apparatus acceptance has not been reached. Confirmatory horizon selection remains
+Status: **Historical Pilot 0 closure decisions remain ratified. The Pilot 0
+implementation subsequently passed its immutable 557-test baseline gate. Phase A
+calibration tooling later passed an 823-test non-empirical pre-policy baseline and a
+distinct 848-test post-policy gate on 2026-09-11 after the fixed policy package and
+production execution adapter were implemented. Confirmatory horizon selection remains
 DEFERRED_BY_DESIGN — PILOT_0_CALIBRATION, not a new human-decision blocker.**
+
+## Current implementation-status addendum — 2026-09-11
+
+This register is the specification-decision record, not the current release
+attestation. Its older implementation-status phrases are retained as historical
+context and are superseded by `validation/IMPLEMENTATION_CHECKPOINT.md`,
+`validation/PRE_CALIBRATION_BASELINE.json`, and the current
+`validation/CALIBRATION_TOOLING_REVIEW.json`.
+
+The Phase A policy-ensemble decision is ratified: initial world
+calibration uses one fixed, versioned heterogeneous deterministic eight-role policy
+panel, identical across vectors, seeds, and iterations, using participant-equivalent
+authorized projections and no Qwen inference. The policy package, production adapter,
+manifest/attestation binding, recovery, and reducer-backed coverage gate now pass the
+post-policy validation in `validation/CALIBRATION_TOOLING_REVIEW.json`. No empirical
+calibration, Pilot 0 research, or confirmatory execution is authorized by this addendum.
 
 This register records the human-ratified answers applied during specification closure. It is subordinate to `INVARIANTS.spec.md` and is itself versioned with the governing specification set. Issue comments record the corresponding GitHub update. No runtime implementation or experiment is authorized by this document.
 
@@ -31,13 +49,13 @@ The ratified decisions establish policy and contract boundaries. World-calibrati
 | #109 | Persistent identity, incarnation/session, and model invocation are distinct; recovery/fork/retry lineage is explicit. | INVARIANTS, WORLD, schemas | Resolved; identity, session, invocation, and history-treatment lineage are explicit. |
 | #110 | Formal organization mechanics are absent from Pilot 0, while emergent cooperation and coalition behavior through ordinary participant mechanics remain allowed. | WORLD, STATISTICS, EVALUATION, VALIDATION | Resolved. |
 | #111 | Future organizations are first-class persistent entities with explicit lifecycle, governance, privacy, memory, communication, publication, turns, and dissolution. | WORLD, schemas, VALIDATION | Structural contract added; exact future mechanics deferred. |
-| #56 | Versioned specialist conflict register with decision provenance; unresolved research conflicts remain blocking. | INVARIANTS, STATISTICS, validation/SPECIALIST_CONFLICT_REGISTER.json | Implementation findings, conflicting positions and authority/disposition are recorded; full adversarial acceptance remains pending. |
+| #56 | Versioned specialist conflict register with decision provenance; unresolved research conflicts remain blocking. | INVARIANTS, STATISTICS, validation/SPECIALIST_CONFLICT_REGISTER.json | Historical specification conflicts are resolved; later implementation and calibration reviews have separate versioned validation records. |
 | #4 | Human-ratified endpoint v2: four equal-weight standardized blocks, commitment fulfillment, signed reciprocity channels, repair, and signed early/late change. Six missingness statuses, five-turn reciprocity, blinded coding and canonical regeneration. | STATISTICS, ENDPOINT_CODEBOOK, PRIMARY_ENDPOINT.spec.json, schemas, src/coding.js, src/analysis.js | Resolved; commitment outcomes use due/evaluable turns, repair opportunities use rupture turns, and cross-window episode fields regenerate from canonical evidence. |
 | #5 | Neutral prompts; persistence manipulation check; no instruction toward cooperation, trust, morality, or relational effects. | INVARIANTS, WORLD, STATISTICS, VALIDATION | Propagated; fixtures specified. |
 | #11 | Preserve free-form promises verbatim; blinded preregistered coding for formation, fulfillment, breach, modification, release, ambiguity. | WORLD, STATISTICS, EVALUATION | Propagated; codebook contents remain required. |
 | #12 | Treatment-neutral preregistered fixed/world-terminal termination only; no evidence-driven stopping. | INVARIANTS, WORLD, STATISTICS, HORIZON_POLICY.spec.json | Resolved by design; Pilot 0 is 20 turns and the confirmatory numeric value is deferred to pooled calibration evidence. |
 | #14 | Resident interviews/self-reports are qualitative, preserved verbatim, and excluded from primary causal evidence. | INVARIANTS, STATISTICS, EVALUATION | Propagated. |
-| #51 | Breached runs are preserved with complete provenance; inclusion/exclusion is preregistered; security remains analyzable. | INVARIANTS, STATISTICS, EVALUATION | Propagated; breach classifier implementation pending. |
+| #51 | Breached runs are preserved with complete provenance; inclusion/exclusion is preregistered; security remains analyzable. | INVARIANTS, STATISTICS, EVALUATION | Propagated; the later validated Pilot 0 baseline includes breach classification and preservation conformance. |
 | #64 | Forks/replays are not independent samples; branch inference requires a separate preregistered design. | INVARIANTS, STATISTICS, EVALUATION | Propagated. |
 | #53 | Every metric declares grain, denominator, eligibility; nested observations are not independent; UI and research share definitions. | STATISTICS, EVALUATION, schemas | Propagated; metric registry population required. |
 | #62 | Longitudinal termination, censoring, missingness, ineligibility, and elimination remain explicit in denominators. | STATISTICS, EVALUATION, schemas | Propagated. |
@@ -198,4 +216,16 @@ Combat coefficients, recruitment ratios, casualty functions, resource production
 
 ## Closure rule
 
-Pilot 0 specification closure is reached: its manifest, 20-turn boundary, endpoint, identity, action lifecycle, conflict, evidence, ACL, parameter, event-catalogue, and validation contracts are defined. Pilot 0 execution still requires implementation conformance, deterministic replay, security, provenance, and adversarial acceptance tests. Confirmatory horizon selection is deferred by design until Pilot 0 evidence; #112 remains blocked until that procedure is applied and all confirmatory artifacts are frozen and validated. GitHub currently reports 114 open issues and 42 open `severity:critical` issues; implementation and execution acceptance work remains outstanding.
+Pilot 0 specification closure is reached: its manifest, 20-turn boundary, endpoint,
+identity, action lifecycle, conflict, evidence, ACL, parameter, event-catalogue, and
+validation contracts are defined. The original closure snapshot predated implementation;
+its statements that conformance, replay, security, provenance, and adversarial acceptance
+were still outstanding were superseded by the validated 557-test Pilot 0 baseline.
+
+The historical 823/823 result recorded on 2026-09-11 remains the non-empirical
+**pre-policy** Phase A tooling baseline. The distinct 848/848 post-policy result satisfies
+the policy-package and production-adapter implementation gates, but does not freeze
+calibration values or authorize calibration. Confirmatory
+horizon selection remains deferred by design until Pilot 0 evidence; #112 remains blocked
+until that procedure is applied and all confirmatory artifacts are frozen and validated.
+Historical issue counts in earlier snapshots are not current tracker status.

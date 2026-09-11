@@ -6,7 +6,7 @@ The repository contains the Pilot 0 apparatus and an expanding non-empirical con
 
 The complete Pilot 0 apparatus is implemented for build and non-empirical conformance validation. The four-component endpoint uses blinded coding, explicit missingness, component-specific temporal attribution and clean-room regeneration. Closed conquest cycles eliminate every qualifying member atomically and transition estates to explicit unclaimed, unaffiliated or inactive states without an ID-selected successor. See [IMPLEMENTATION_BLOCKERS.md](IMPLEMENTATION_BLOCKERS.md) for the resolved decision record. No empirical or confirmatory execution is authorized.
 
-Validation records: [endpoint conformance](validation/ENDPOINT_OPERATIONALIZATION.md), [native HF runtime checks](validation/NATIVE_RUNTIME_SMOKE.md), [implementation checkpoint](validation/IMPLEMENTATION_CHECKPOINT.md), and the [pre-calibration baseline manifest](validation/PRE_CALIBRATION_BASELINE.json). The final integrated result is 557 passed, 0 failed, and 0 skipped. Fixed arithmetic-only native inference checks are software validation, not Pilot 0 research evidence.
+Validation records: [endpoint conformance](validation/ENDPOINT_OPERATIONALIZATION.md), [native HF runtime checks](validation/NATIVE_RUNTIME_SMOKE.md), [implementation checkpoint](validation/IMPLEMENTATION_CHECKPOINT.md), the [pre-calibration baseline manifest](validation/PRE_CALIBRATION_BASELINE.json), and the [Phase A tooling review](validation/CALIBRATION_TOOLING_REVIEW.json). The immutable Pilot 0 baseline passed 557/557 tests. The Phase A apparatus subsequently passed an 823/823 non-empirical pre-policy baseline and a distinct 848/848 post-policy validation after the deterministic policy package and production adapter were implemented. Fixed arithmetic-only native inference checks and synthetic calibration fixtures are software validation, not Pilot 0 research evidence.
 
 ## Hugging Face model runtime
 
@@ -39,6 +39,7 @@ The objective is intentionally neutral: it does not instruct trust, cooperation,
 | [STATISTICS](STATISTICS.spec.md) | Treatments, randomization, pilots, estimands, outcomes, power, censoring, protocol deviations, and falsification. |
 | [EVALUATION](EVALUATION.spec.md) | Player and Observer surfaces, event exploration, replay, visualizations, evidence hierarchy, exports, and analysis views. |
 | [MODEL_RUNTIME](MODEL_RUNTIME.spec.md) | Hugging Face artifact/revision lock, runtime provenance, condition fidelity and synthetic/empirical separation. |
+| [GRAPHICS](GRAPHICS.spec.md) | Deferred, non-blocking product roadmap for semantic zoom and a richer human game surface; no current Pilot 0 implementation authority. |
 
 ## Non-negotiable design commitments
 
@@ -159,3 +160,31 @@ and explained in [CALIBRATION_PROTOCOL.md](CALIBRATION_PROTOCOL.md). These files
 prepare calibration but do not authorize it. World-calibration values remain
 `PROVISIONAL` until Phase A has been separately authorized, executed, accepted,
 and frozen into a new versioned Pilot 0 manifest.
+
+## Phase A calibration tooling
+
+The versioned Phase A apparatus is described in
+[docs/PHASE_A_CALIBRATION_TOOLING.md](docs/PHASE_A_CALIBRATION_TOOLING.md). Run
+`npm run calibration:plan` to inspect the frozen bounded search without starting
+any world or model execution. `npm run calibration:verify -- --archive PATH
+--mode synthetic
+--archive-public-key PATH --archive-key-id ID --attestor-public-key PATH
+--attestor-key-id ID --trusted-head PATH` independently verifies a complete
+synthetic-conformance archive against an externally retained exact final head
+and separate archive and attestation trust. Empirical verification requires
+`--mode empirical` plus the independently signed authorization, release,
+adapter, evidence, evidence-head, archive, and attestor trust inputs documented
+in the Phase A tooling guide; it has no archive-key attestor fallback.
+The `run` CLI entry point remains dormant unless separately signed execution,
+release, evidence, archive-signing, and attestation authorities are supplied;
+this repository
+state does not authorize empirical calibration.
+
+Initial Phase A calibration uses the frozen, heterogeneous deterministic policy panel
+in [config/phase-a-policy-package.json](config/phase-a-policy-package.json): eight
+coverage-oriented roles, a balanced assignment over the frozen seed panel, participant
+projections only, and no Qwen inference. The production adapter, policy binding,
+manifest/attestation and recovery integration, and reducer-backed synthetic mechanics
+coverage passed the distinct post-policy validation recorded above. This makes the
+tooling ready for separately authorized Phase A execution; it does not itself authorize
+empirical calibration.

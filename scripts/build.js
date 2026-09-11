@@ -13,6 +13,7 @@ await cp(resolve(root, "src"), resolve(dist, "src"), { recursive: true });
 await mkdir(resolve(dist, "scripts"), { recursive: true });
 await cp(resolve(root, "scripts/calibration-cli.js"), resolve(dist, "scripts/calibration-cli.js"));
 await cp(resolve(root, "scripts/calibration-selector.js"), resolve(dist, "scripts/calibration-selector.js"));
+await cp(resolve(root, "scripts/calibration-adapter-worker.js"), resolve(dist, "scripts/calibration-adapter-worker.js"));
 // Package-root assets the copied modules read at module load. Without them the
 // packaged CLI throws before it can dispatch a verb, so they are part of the
 // runtime, not documentation: config/ backs src/model-adapter.js and src/world.js,
@@ -23,7 +24,7 @@ await cp(resolve(root, "config"), resolve(dist, "config"), { recursive: true });
 await mkdir(resolve(dist, "validation"), { recursive: true });
 await cp(resolve(root, "validation/PRE_CALIBRATION_BASELINE.json"), resolve(dist, "validation/PRE_CALIBRATION_BASELINE.json"));
 for (const name of ["PILOT_0_CALIBRATION_PROTOCOL.spec.json", "PARAMETER_REGISTRY.spec.json",
-  "PRIMARY_ENDPOINT.spec.json", "ENDPOINT_CODEBOOK.spec.md", "package.json", "package-lock.json"]) await cp(resolve(root, name), resolve(dist, name));
+  "PRIMARY_ENDPOINT.spec.json", "ENDPOINT_CODEBOOK.spec.md", "PROJECTION_POLICY.spec.json", "package.json", "package-lock.json"]) await cp(resolve(root, name), resolve(dist, name));
 const tag = "v0.1.0-pilot0";
 const receipt = existsSync(resolve(root, ".git")) ? {
   tag, commit: execFileSync("git", ["rev-parse", "--verify", `${tag}^{commit}`], { cwd: root, encoding: "utf8" }).trim()

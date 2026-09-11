@@ -8,6 +8,7 @@
     "denominator",
     "eligibility_count",
     "value",
+    "scaled_value",
     "definition_hash"
   ],
   "properties": {
@@ -36,6 +37,14 @@
         "number",
         "null"
       ]
+    },
+    "scaled_value": {
+      "type": ["string", "null"],
+      "pattern": "^-?[0-9]+$"
+    },
+    "category_counts": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 0}
     },
     "definition_hash": {
       "type": "string",

@@ -1,0 +1,6 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://civilization-lab.invalid/schemas/calibration-attestation.schema.json",
+  "type":"object","additionalProperties":false,"required":["schema_version","attestation_version","key_id","payload_hash","signature"],
+  "properties":{"schema_version":{"const":"1.0.0"},"attestation_version":{"const":"phase-a-calibration-attestation-1.0.0"},"key_id":{"type":"string"},"payload_hash":{"type":"string","pattern":"^[0-9a-f]{64}$"},"signature":{"type":"string","minLength":1}}
+}

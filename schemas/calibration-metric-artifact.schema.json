@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/calibration-metric-artifact.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "seed",
+    "opaque_source_id",
+    "evidence_hash",
+    "rng_provenance_hash",
+    "metric_definition_registry_hash",
+    "metrics",
+    "trust_proof"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.0.0"
+    },
+    "seed": {
+      "type": "string"
+    },
+    "opaque_source_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "evidence_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "rng_provenance_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "metric_definition_registry_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "metrics": {
+      "type": "object",
+      "required": [
+        "viability.median_continuation_turn",
+        "viability.premature_absorbing_rate",
+        "viability.distinct_state_trajectory_rate",
+        "contact.median_first_contact_turn",
+        "contact.mean_post_contact_events_per_turn",
+        "contact.meaningful_multi_polity_run_rate",
+        "economy.median_production_consumption_ratio",
+        "economy.insolvency_or_collapse_rate",
+        "economy.unused_resource_saturation_rate",
+        "technology.median_first_completion_turn",
+        "technology.no_completion_rate",
+        "technology.trivial_completion_rate",
+        "population.recruitment_feasible_run_rate",
+        "population.depletion_rate",
+        "population.unit_saturation_rate",
+        "population.casualty_recovery_rate",
+        "conflict.mean_battles_per_run",
+        "conflict.annihilation_rate",
+        "conflict.perpetual_conflict_rate",
+        "conflict.dominant_action_share",
+        "information.median_discovery_turn",
+        "information.detection_event_rate",
+        "information.early_saturation_rate",
+        "information.permanent_isolation_rate",
+        "bandwidth.action_budget_utilization",
+        "bandwidth.phase_limit_block_rate",
+        "runtime.deadline_failure_rate",
+        "relational.median_commitment_opportunities",
+        "relational.median_reciprocity_opportunities",
+        "relational.rupture_opportunity_run_rate",
+        "relational.repeated_interaction_density",
+        "relational.zero_opportunity_run_rate"
+      ],
+      "properties": {
+        "viability.median_continuation_turn": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "viability.premature_absorbing_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "viability.distinct_state_trajectory_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "contact.median_first_contact_turn": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "contact.mean_post_contact_events_per_turn": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "contact.meaningful_multi_polity_run_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "economy.median_production_consumption_ratio": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "economy.insolvency_or_collapse_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "economy.unused_resource_saturation_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "technology.median_first_completion_turn": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "technology.no_completion_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "technology.trivial_completion_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "population.recruitment_feasible_run_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "population.depletion_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "population.unit_saturation_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "population.casualty_recovery_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "conflict.mean_battles_per_run": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "conflict.annihilation_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "conflict.perpetual_conflict_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "conflict.dominant_action_share": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "information.median_discovery_turn": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "information.detection_event_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "information.early_saturation_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "information.permanent_isolation_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "bandwidth.action_budget_utilization": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "bandwidth.phase_limit_block_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "runtime.deadline_failure_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "relational.median_commitment_opportunities": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "relational.median_reciprocity_opportunities": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "relational.rupture_opportunity_run_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "relational.repeated_interaction_density": {
+          "$ref": "calibration-metric-fact.schema.json"
+        },
+        "relational.zero_opportunity_run_rate": {
+          "$ref": "calibration-metric-fact.schema.json"
+        }
+      },
+      "additionalProperties": false
+    },
+    "trust_proof": {
+      "type": "object"
+    }
+  }
+}

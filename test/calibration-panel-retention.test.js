@@ -283,17 +283,13 @@ test("accepted, rejected, failed, and incident-affected attempts are all retaine
     const incident = calibrationProtocolIncident({ disclosure: "TREATMENT_LABEL_DISCLOSED",
       affectedDecision: `retained-${CALIBRATION_FAILURES.PROTOCOL_VIOLATION}-${panel[2]}`,
       detectedAt: "1970-01-01T00:00:00.000Z", authority: "calibration-protocol-authority" });
-    await reopened.update(state => { state.incidents = [...state.incidents, incident]; return state; });
-    const afterIncident = await CalibrationArchive.open(directory, attestor);
-    assert.equal(afterIncident.state.incidents.length, 1);
-    assert.equal(afterIncident.state.incidents[0].affected_decision, incident.affected_decision);
-    assert.equal(afterIncident.state.incidents[0].disposition, "SELECTION_INVALID_REPEAT_FROM_LAST_UNEXPOSED_STATE");
-    assert.throws(() => buildCalibrationResult({ candidates: afterIncident.state.assessments, manifests,
+    await assert.rejects(reopened.recordIncident({ disclosure: "TREATMENT_LABEL_DISCLOSED",
+      affectedDecision: incident.affected_decision }), /completed calibration archive is immutable/);
+    assert.throws(() => buildCalibrationResult({ candidates: reopened.state.assessments, manifests,
       protocolVersion: protocol.protocol_version, implementationCommit: implementation,
-      incidents: afterIncident.state.incidents }), /incidents prevent result selection/);
+      incidents: [incident] }), /incidents prevent result selection/);
 
     // Re-reading the archive returns the same complete attempt set.
-    assert.deepEqual(afterIncident.state.attempts, reopened.state.attempts);
     const thirdRead = await CalibrationArchive.open(directory, attestor);
     assert.deepEqual(thirdRead.state.attempts, reopened.state.attempts);
     assert.deepEqual(thirdRead.state.completed_keys.sort(), reopened.state.completed_keys.sort());
@@ -303,14 +299,18 @@ test("accepted, rejected, failed, and incident-affected attempts are all retaine
 test("rejected candidates are reported in the result, never dropped from it", () => {
   const acceptedSet = { candidate: "accepted" }, rejectedSet = { candidate: "rejected" };
   const bounded = protocol.metrics.find(metric => metric.acceptance.maximum !== undefined);
+  const acceptedMetrics = acceptedAggregateMetrics();
+  const rejectedMetrics = { ...acceptedAggregateMetrics(), [bounded.metric_id]: bounded.acceptance.maximum + 1 };
   const accepted = assessCalibrationCandidate({ parameter_set_hash: sha256(acceptedSet), seed_ids: panel,
-    aggregate_metrics: acceptedAggregateMetrics(), worst_seed_metric_pass_fraction: 1 });
+    aggregate_metrics: acceptedMetrics, worst_seed_metric_pass_fraction: 1 });
   const rejected = assessCalibrationCandidate({ parameter_set_hash: sha256(rejectedSet), seed_ids: panel,
-    aggregate_metrics: { ...acceptedAggregateMetrics(), [bounded.metric_id]: bounded.acceptance.maximum + 1 } });
+    aggregate_metrics: rejectedMetrics });
   assert.equal(accepted.accepted, true);
   assert.equal(rejected.accepted, false);
-  accepted.parameter_set = acceptedSet; accepted.candidate_attestation_hash = "a".repeat(64);
-  rejected.parameter_set = rejectedSet; rejected.candidate_attestation_hash = "b".repeat(64);
+  accepted.parameter_set = acceptedSet; accepted.aggregate_metrics = acceptedMetrics;
+  accepted.aggregate_status = {}; accepted.candidate_attestation_hash = "a".repeat(64);
+  rejected.parameter_set = rejectedSet; rejected.aggregate_metrics = rejectedMetrics;
+  rejected.aggregate_status = {}; rejected.candidate_attestation_hash = "b".repeat(64);
   const result = buildCalibrationResult({ candidates: [accepted, rejected], manifests: panel.map(seed => ({ seed })),
     protocolVersion: protocol.protocol_version, implementationCommit: implementation, incidents: [] });
   assert.equal(result.selected_parameter_set_hash, accepted.parameter_set_hash);
@@ -358,7 +358,7 @@ test("no public API drops, filters, or replaces a retained attempt", async () =>
     const victim = archive.state.attempts[0].attempt_id;
     await archive.update(state => { state.attempts = state.attempts.filter(item => item.attempt_id !== victim); return state; });
     await assert.rejects(() => CalibrationArchive.open(directory, attestor),
-      /orphan calibration attempt or missing retained attempt detected/);
+      /signed calibration history deleted or mutated retained attempts|orphan calibration attempt or missing retained attempt detected/);
   });
 
 });
@@ -378,10 +378,48 @@ test("a completed-key index that no longer covers every retained attempt fails c
     const key = archive.state.completed_keys[0];
     await archive.update(state => { state.completed_keys = state.completed_keys.filter(item => item !== key); return state; });
     await assert.rejects(() => CalibrationArchive.open(directory, attestor),
-      /completed-key index differs from retained calibration attempts/,
+      /signed calibration history deleted retained completed_keys|completed-key index differs from retained calibration attempts/,
       "a completed-key index that no longer covers every retained attempt must fail closed");
   });
 
+});
+
+test("a signer cannot erase both a retained attempt index and its artifact directory", async () => {
+  await withTempArchive(async directory => {
+    const attestor = syntheticAttestationKeys();
+    const archive = await new CalibrationArchive(directory, attestor)
+      .initialize({ protocolVersion: protocol.protocol_version, implementationCommit: implementation });
+    const attempt = retainedAttempt({ calibrationRunId: archive.state.calibration_run_id, seed: panel[0],
+      status: CALIBRATION_FAILURES.PARAMETER_FAILURE, reason: "retained rejected vector" });
+    await archive.recordAttempt(attempt, { evidence: { retained: panel[0] }, metrics: {} });
+    await archive.update(state => {
+      state.attempts = [];
+      state.completed_keys = [];
+      return state;
+    });
+    await rm(join(directory, "attempts", attempt.attempt_id), { recursive: true });
+    await assert.rejects(() => CalibrationArchive.open(directory, attestor), /signed calibration history deleted or mutated retained attempts/,
+      "a newly signed generation must not authenticate deletion of retained failed evidence");
+  });
+});
+
+for (const [field, retained, rejection] of [
+  ["attempts", { attempt_id: "retained-attempt" }, /retained attempts/],
+  ["completed_keys", "retained-key", /retained completed_keys/],
+  ["executions", { key: "retained-execution" }, /retained executions/],
+  ["assessments", { parameter_set_hash: "a".repeat(64) }, /retained assessments/],
+  ["candidates", { parameter_set_hash: "b".repeat(64) }, /retained candidates/],
+  ["incidents", { incident_type: "retained-incident" }, /retained incidents/],
+  ["execution_intents", { key: "retained-intent", attempt_id: "attempt", request: {}, request_hash: "c".repeat(64), status: "DISPATCH_PENDING" }, /retained execution intent/]
+]) test(`a later archive-signer generation cannot delete ${field}`, async () => {
+  await withTempArchive(async directory => {
+    const attestor = syntheticAttestationKeys();
+    const archive = await new CalibrationArchive(directory, attestor)
+      .initialize({ protocolVersion: protocol.protocol_version, implementationCommit: implementation });
+    await archive.update(state => { state[field].push(structuredClone(retained)); return state; });
+    await archive.update(state => { state[field] = []; return state; });
+    await assert.rejects(() => CalibrationArchive.open(directory, attestor), rejection);
+  });
 });
 
 /** Initialize an archive holding exactly one retained attempt; returns its artifact directory. */
