@@ -1,13 +1,17 @@
 import { createHash, createPrivateKey, createPublicKey, randomUUID, sign, timingSafeEqual, verify } from 'node:crypto';
 import { createServer as createHttpsServer } from 'node:https';
-import { chmod, link, lstat, mkdir, open, readFile, readdir, rename, rmdir, unlink } from 'node:fs/promises';
+import { chmod, link, lstat, mkdir, open, readFile, readdir, rename, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { assert, canonicalize, clone, sha256 } from './core.js';
 import { verifyEvidenceIntegrity } from './replay.js';
 import { assertValidSchema } from './schema.js';
 
 const REQUEST_VERSION = 'phase-a-evidence-authority-request-1.1.0';
 const SERVICE_VERSION = 'phase-a-production-evidence-authority-1.0.0';
+// Complete frozen 20-turn Phase A evidence is about 158 MB before receipts.
+// The former 64 MiB ceiling rejected valid requests during body ingestion.
+export const EVIDENCE_AUTHORITY_MAX_REQUEST_BYTES = 512 * 1024 * 1024;
 const HASH = /^[a-f0-9]{64}$/;
 const INTENT = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$/;
 const HEAD_NAME = generation => String(generation).padStart(20, '0') + '.json';
@@ -164,7 +168,7 @@ function validateFinalize(input) {
 
 export function createCalibrationEvidenceAuthority({ directory, credential, evidencePrivateKey,
   evidenceHeadPrivateKey, authorityId, trustedHeadDirectory = null, authorizeRequest = null,
-  authorizeFinalization = null, fault = async () => {} }) {
+  authorizeFinalization = null, receiptMode = 'EMPIRICAL_CALIBRATION', fault = async () => {} }) {
   assert(typeof credential === 'string' && credential.length >= 16, 'evidence authority credential is unavailable');
   assert(typeof authorityId === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/.test(authorityId),
     'invalid evidence authority identity');
@@ -175,7 +179,8 @@ export function createCalibrationEvidenceAuthority({ directory, credential, evid
   const evidencePublicKey = createPublicKey(evidenceKey), headPublicKey = createPublicKey(headKey);
   const evidenceKeyId = keyId(evidencePublicKey), headKeyId = keyId(headPublicKey);
   assert(evidenceKeyId !== headKeyId, 'evidence and evidence-head authorities must be cryptographically distinct');
-  const paths = Object.freeze({ intents: join(directory, 'execution-intents'), objects: join(directory, 'evidence-objects'),
+  const paths = Object.freeze({ intents: join(directory, 'execution-intents'), claims: join(directory, 'finalization-claims'),
+    objects: join(directory, 'evidence-objects'),
     finalizations: join(directory, 'finalizations'), pending: join(directory, 'pending-finalizations'),
     heads: join(directory, 'authority-heads') });
   const anchorDirectory = trustedHeadDirectory === null ? null : resolve(trustedHeadDirectory);
@@ -281,17 +286,27 @@ export function createCalibrationEvidenceAuthority({ directory, credential, evid
       evidence_head_key_id: headKeyId, head: await latestHead() };
   }
 
-  const operationLock = join(directory, '.authority-operation.lock');
   const serialized = work => {
     const result = queue.then(async () => {
       await privateDirectory(directory);
-      try { await mkdir(operationLock, { mode: 0o700 }); }
-      catch {
-        const error = new Error('evidence authority operation already claimed by another process or requires stale-lock recovery');
-        error.code = 'EVIDENCE_AUTHORITY_BUSY'; throw error;
-      }
-      try { if (!initialized) await initialize(); return await work(); }
-      finally { await rmdir(operationLock); }
+      // SQLite's OS-backed write lock is automatically released on process
+      // death. A killed authority therefore cannot strand a persistent lease.
+      const lockPath = join(directory, 'authority-operation-lock.sqlite');
+      const database = new DatabaseSync(lockPath);
+      await chmod(lockPath, 0o600);
+      try {
+        database.exec('PRAGMA busy_timeout=0');
+        try { database.exec('BEGIN IMMEDIATE'); }
+        catch (error) {
+          if (/locked|busy/i.test(error.message)) {
+            const busy = new Error('evidence authority operation already claimed by another process');
+            busy.code = 'EVIDENCE_AUTHORITY_BUSY'; throw busy;
+          }
+          throw error;
+        }
+        try { if (!initialized) await initialize(); return await work(); }
+        finally { database.exec('ROLLBACK'); }
+      } finally { database.close(); }
     });
     queue = result.catch(() => {});
     return result;
@@ -318,8 +333,15 @@ export function createCalibrationEvidenceAuthority({ directory, credential, evid
   async function observeIntent(executionIntentId) {
     return serialized(async () => {
       const id = safeIntent(executionIntentId);
+      let pendingRaw = await bytesIfPresent(join(paths.pending, id + '.json'));
+      if (pendingRaw !== null && await bytesIfPresent(join(paths.finalizations, id + '.json')) === null) {
+        const pending = JSON.parse(pendingRaw);
+        assert(canonicalize(pending) === pendingRaw && pending.execution_intent_id === id,
+          'durable pending execution intent tampered');
+        await completePending(pending);
+        pendingRaw = await bytesIfPresent(join(paths.pending, id + '.json'));
+      }
       const finalizedRaw = await bytesIfPresent(join(paths.finalizations, id + '.json'));
-      const pendingRaw = await bytesIfPresent(join(paths.pending, id + '.json'));
       const intentRaw = await bytesIfPresent(join(paths.intents, id + '.json'));
       let state = 'ABSENT', requestHash = null, result = null, finalizationHash = null;
       if (finalizedRaw !== null) {
@@ -385,6 +407,11 @@ export function createCalibrationEvidenceAuthority({ directory, credential, evid
       }
       const bundle = clone(input.bundle), object = { bundle, service_state: null, analysis_package: null };
       const objectBytes = canonicalize(object), objectHash = sha256(objectBytes);
+      const claim = { version: 'phase-a-evidence-finalization-claim-1.0.0', execution_intent_id: id,
+        request_hash: input.request_hash, request: clone(input.request), binding: clone(input.binding),
+        adapter_hash: input.adapterHash, adapter_package_digest: input.adapterPackageDigest,
+        finalization_input_hash: sha256(input), evidence_object_hash: objectHash };
+      await immutable(join(paths.claims, id + '.json'), canonicalize(claim));
       await fault('before_evidence_object_commit', { execution_intent_id: id, event_count: bundle.events.length });
       await immutable(join(paths.objects, objectHash + '.json'), objectBytes);
       await fault('after_evidence_object_commit_before_attestation', { execution_intent_id: id,
@@ -395,9 +422,9 @@ export function createCalibrationEvidenceAuthority({ directory, credential, evid
         event_head: eventHead, status: 'COMPLETE', payload_classification_changes: [] };
       const archiveEnvelope = envelope(archiveBody, evidenceKey);
       const archiveHead = { generation: 0, digest: sha256(archiveEnvelope) };
-      const evidenceHeadReceipt = envelope({ version: 'phase-a-evidence-head-1.0.0', mode: 'EMPIRICAL_CALIBRATION',
+      const evidenceHeadReceipt = envelope({ version: 'phase-a-evidence-head-1.0.0', mode: receiptMode,
         run_id: bundle.run_id, evidence_key_id: evidenceKeyId, adapter_hash: input.adapterHash, head: archiveHead }, headKey);
-      const adapterReceipt = envelope({ version: 'phase-a-adapter-execution-receipt-1.0.0', mode: 'EMPIRICAL_CALIBRATION',
+      const adapterReceipt = envelope({ version: 'phase-a-adapter-execution-receipt-1.0.0', mode: receiptMode,
         run_id: bundle.run_id, seed: input.request.seed, parameter_set_hash: input.binding.calibration_parameter_set_hash,
         execution_request_hash: sha256(input.request), policy_manifest_hash: input.binding.policy_manifest_hash,
         adapter_hash: input.adapterHash, adapter_executable_hash: input.adapterPackageDigest,
@@ -416,6 +443,7 @@ export function createCalibrationEvidenceAuthority({ directory, credential, evid
       const pending = { execution_intent_id: id, finalization, authority_head: envelope(authorityHeadBody, headKey) };
       await fault('during_final_attempt_attestation', { execution_intent_id: id, generation });
       await immutable(join(paths.pending, id + '.json'), canonicalize(pending));
+      await fault('after_finalization_staged_before_head_update', { execution_intent_id: id, generation });
       await completePending(pending);
       return clone(result);
     });
@@ -444,6 +472,8 @@ export function createCalibrationEvidenceAuthority({ directory, credential, evid
     evidence_key_id: evidenceKeyId, evidence_head_key_id: headKeyId, head: await latestHead() }));
   return Object.freeze({ version: SERVICE_VERSION, trustDomain: 'EXTERNAL_EVIDENCE_AUTHORITY',
     authorizationScoped: typeof authorizeRequest === 'function' && typeof authorizeFinalization === 'function', initialize: initializeSerialized,
+    authenticateRequest(supplied) { try { authenticate(credential, supplied); return true; }
+      catch { throw evidenceAuthorityRequestRejected(); } },
     getIntent, observeIntent, putIntent, finalize, handle, evidenceKeyId, evidenceHeadKeyId: headKeyId, authorityId, directory });
 }
 
@@ -454,6 +484,7 @@ export async function verifyCalibrationEvidenceAuthority({ directory, evidencePu
   const headKey = evidenceHeadPublicKey?.type === 'public' ? evidenceHeadPublicKey : createPublicKey(evidenceHeadPublicKey);
   const evidenceKeyId = keyId(evidenceKey), headKeyId = keyId(headKey);
   const headsDirectory = join(directory, 'authority-heads'), finalizations = join(directory, 'finalizations');
+  const claimsDirectory = join(directory, 'finalization-claims'), objectsDirectory = join(directory, 'evidence-objects');
   const names = (await readdir(headsDirectory)).filter(name => /^\d{20}\.json$/.test(name)).sort();
   let prior = null;
   for (let index = 0; index < names.length; index += 1) {
@@ -487,10 +518,38 @@ export async function verifyCalibrationEvidenceAuthority({ directory, evidencePu
     assert(canonicalize(finalized.result.archive_export.object) === canonicalize(object) &&
       canonicalize(finalized.result.bundle) === canonicalize(object.bundle), 'authority archive/result object mismatch');
     verifyEvidenceIntegrity(object.bundle);
+    const claimRaw = await readFile(join(claimsDirectory, body.execution_intent_id + '.json'), 'utf8');
+    const claim = JSON.parse(claimRaw);
+    assert(canonicalize(claim) === claimRaw && claim.execution_intent_id === body.execution_intent_id &&
+      claim.request_hash === finalized.request_hash && claim.evidence_object_hash === finalized.evidence_object_hash &&
+      claim.finalization_input_hash === finalized.input_hash &&
+      claim.finalization_input_hash === sha256({ execution_intent_id: claim.execution_intent_id,
+        request_hash: claim.request_hash, bundle: object.bundle, request: claim.request, binding: claim.binding,
+        adapterHash: claim.adapter_hash, adapterPackageDigest: claim.adapter_package_digest }),
+    'authority finalized record lacks its exact immutable finalization claim');
     prior = sha256(value);
   }
   const finalizedNames = (await readdir(finalizations)).filter(name => name.endsWith('.json')).sort();
   assert(finalizedNames.length === names.length, 'authority finalized inventory conflicts with monotonic head history');
+  const objectNames = (await readdir(objectsDirectory)).filter(name => name.endsWith('.json')).sort();
+  let claimNames, claimsDirectoryPresent = true;
+  try { claimNames = (await readdir(claimsDirectory)).filter(name => name.endsWith('.json')).sort(); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; claimsDirectoryPresent = false; claimNames = []; }
+  assert(claimsDirectoryPresent || names.length === 0 && finalizedNames.length === 0 && objectNames.length === 0,
+    'legacy authority store lacks finalization claims for nonempty evidence');
+  const claimedObjects = new Set();
+  for (const name of claimNames) {
+    const raw = await readFile(join(claimsDirectory, name), 'utf8'), claim = JSON.parse(raw);
+    assert(canonicalize(claim) === raw && canonicalize(Object.keys(claim).sort()) === canonicalize([
+      'adapter_hash','adapter_package_digest','binding','evidence_object_hash','execution_intent_id',
+      'finalization_input_hash','request','request_hash','version'].sort()) &&
+      claim.version === 'phase-a-evidence-finalization-claim-1.0.0' &&
+      name === claim.execution_intent_id + '.json' && HASH.test(claim.request_hash) && HASH.test(claim.finalization_input_hash) &&
+      HASH.test(claim.evidence_object_hash), 'authority finalization claim malformed');
+    claimedObjects.add(claim.evidence_object_hash);
+  }
+  assert(objectNames.every(name => claimedObjects.has(name.slice(0, -5))),
+    'authority evidence object lacks an immutable finalization claim');
   const actualHead = names.length ? { generation: names.length - 1, digest: prior } : null;
   if (trustedHead !== undefined) assert(canonicalize(actualHead) === canonicalize(trustedHead),
     'authority rollback differs from externally retained trusted head');
@@ -498,36 +557,66 @@ export async function verifyCalibrationEvidenceAuthority({ directory, evidencePu
     head: actualHead };
 }
 
-export function createCalibrationEvidenceAuthorityHttpsServer({ authority, certificate, privateKey, host = '127.0.0.1', port = 0 }) {
+export function createCalibrationEvidenceAuthorityHttpsServer({ authority, certificate, privateKey, host = '127.0.0.1', port = 0,
+  maxRequestBytes = EVIDENCE_AUTHORITY_MAX_REQUEST_BYTES, maxConcurrentRequests = 1,
+  diagnostic = () => {}, transportFault = async () => {} }) {
   assert(authority?.version === SERVICE_VERSION, 'production evidence authority service required');
   assert(certificate && privateKey, 'TLS certificate and private key are required');
-  let server, endpoint;
+  assert(Number.isSafeInteger(maxRequestBytes) && maxRequestBytes > 0, 'evidence authority request limit invalid');
+  assert(Number.isSafeInteger(maxConcurrentRequests) && maxConcurrentRequests > 0 && maxConcurrentRequests <= 16,
+    'evidence authority concurrency limit invalid');
+  let server, endpoint, activeRequests = 0;
   return Object.freeze({
     get endpoint() { return endpoint; },
     async start() {
       assert(!server, 'HTTPS evidence authority already started');
       await authority.initialize();
       server = createHttpsServer({ cert: certificate, key: privateKey }, async (request, response) => {
-        let envelopeValidated = false;
+        let envelopeValidated = false, admitted = false;
         try {
           assert(request.method === 'POST' && request.url === '/v1/execution-intents', 'malformed authority route');
+          const token = /^Bearer ([^\s]+)$/.exec(request.headers.authorization ?? '')?.[1];
+          authority.authenticateRequest(token);
+          if (activeRequests >= maxConcurrentRequests) {
+            const error = new Error('authority request concurrency limit reached');
+            error.code = 'EVIDENCE_AUTHORITY_BUSY'; error.boundary = 'REQUEST_ADMISSION'; throw error;
+          }
+          const declaredLength = Number(request.headers['content-length']);
+          if (Number.isFinite(declaredLength) && declaredLength > maxRequestBytes) {
+            const error = new Error('authority request exceeds configured byte limit');
+            error.code = 'EVIDENCE_AUTHORITY_REQUEST_TOO_LARGE'; error.boundary = 'REQUEST_BODY_INGESTION'; throw error;
+          }
+          activeRequests += 1; admitted = true;
           const chunks = []; let size = 0;
-          for await (const chunk of request) { size += chunk.length; assert(size <= 64 * 1024 * 1024, 'authority request too large'); chunks.push(chunk); }
+          for await (const chunk of request) {
+            size += chunk.length;
+            if (size > maxRequestBytes) {
+              const error = new Error('authority request exceeds configured byte limit');
+              error.code = 'EVIDENCE_AUTHORITY_REQUEST_TOO_LARGE';
+              error.boundary = 'REQUEST_BODY_INGESTION';
+              throw error;
+            }
+            chunks.push(chunk);
+          }
           const message = JSON.parse(Buffer.concat(chunks).toString('utf8'));
           assert(message.version === REQUEST_VERSION && message.execution_intent_id === message.input?.execution_intent_id,
             'malformed authority request envelope');
           envelopeValidated = true;
-          const token = /^Bearer ([^\s]+)$/.exec(request.headers.authorization ?? '')?.[1];
           const result = await authority.handle({ credential: token, operation: message.operation,
             execution_intent_id: message.execution_intent_id, input: message.input });
+          await transportFault('after_authority_commit_before_acknowledgement', {
+            execution_intent_id: message.execution_intent_id, operation: message.operation });
           response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
           response.end(canonicalize({ execution_intent_id: message.execution_intent_id, ...result }));
         } catch (error) {
-          response.writeHead(!envelopeValidated ? 400 : ['EVIDENCE_AUTHORITY_BUSY'].includes(error?.code) ? 503
+          try { diagnostic(Object.freeze({ code: typeof error?.code === 'string' ? error.code : 'EVIDENCE_AUTHORITY_INTERNAL',
+            boundary: error?.boundary ?? (envelopeValidated ? 'AUTHORIZED_REQUEST_PROCESSING' : 'REQUEST_BODY_INGESTION') })); }
+          catch { /* diagnostics cannot alter the closed authority response */ }
+          response.writeHead(error?.code === 'EVIDENCE_AUTHORITY_BUSY' ? 503 : !envelopeValidated ? 400
             : error?.code === 'EVIDENCE_AUTHORITY_REQUEST_REJECTED' ? 400 : 500,
             { 'content-type': 'application/json', 'cache-control': 'no-store' });
           response.end('{"error":"rejected"}');
-        }
+        } finally { if (admitted) activeRequests -= 1; }
       });
       await new Promise((resolveStart, reject) => { server.once('error', reject); server.listen(port, host, resolveStart); });
       const address = server.address();

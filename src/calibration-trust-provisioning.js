@@ -4,7 +4,7 @@ import {
   createPrivateKey,
   createPublicKey,
   generateKeyPairSync, randomBytes,
-  sign
+  sign, verify
 } from 'node:crypto';
 import { existsSync, realpathSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
@@ -44,6 +44,54 @@ const FROZEN_REFERENCES = Object.freeze({
 const pemPublic = key => key.export({ type: 'spki', format: 'pem' });
 const pemPrivate = key => key.export({ type: 'pkcs8', format: 'pem' });
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+
+async function regularArchiveFiles(directory) {
+  const found = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) found.push(...await regularArchiveFiles(path));
+    else if (entry.isFile()) found.push(path);
+    else throw new Error('predecessor archive contains a non-regular entry');
+  }
+  return found.sort();
+}
+
+export async function verifyFailedPredecessorArchive({ disposition, directory, publicKey }) {
+  directory = resolve(directory);
+  const paths = await regularArchiveFiles(directory), lines = [];
+  for (const path of paths) lines.push(`${digest(await readFile(path))}  ${path}\n`);
+  assert(digest(lines.join('')) === disposition.archive_tree_digest, 'predecessor archive tree digest mismatch');
+  const pointer = JSON.parse(await readFile(join(directory, 'state.json'), 'utf8'));
+  assert(canonicalize({ generation: pointer.generation, digest: pointer.digest }) === canonicalize(disposition.archive_head),
+    'predecessor archive head mismatch');
+  publicKey = createPublicKey(publicKey);
+  assert(pointer.key_id === calibrationKeyId(publicKey), 'predecessor archive pointer key mismatch');
+  const generationNames = (await readdir(join(directory, 'generations')))
+    .filter(name => /^\d{12}\.json$/.test(name)).sort();
+  assert(generationNames.length === pointer.generation + 1, 'predecessor archive generation inventory gap');
+  let prior = null, envelope;
+  for (let index = 0; index < generationNames.length; index += 1) {
+    assert(generationNames[index] === String(index).padStart(12, '0') + '.json',
+      'predecessor archive generation sequence gap');
+    const raw = await readFile(join(directory, 'generations', generationNames[index]), 'utf8');
+    envelope = JSON.parse(raw);
+    assert(canonicalize(envelope) + '\n' === raw && envelope.body?.generation === index &&
+      envelope.body.key_id === calibrationKeyId(publicKey) && envelope.body.parent_generation_digest === prior &&
+      verify(null, Buffer.from(canonicalize(envelope.body)), publicKey, Buffer.from(envelope.signature, 'base64')),
+    'predecessor archive signed generation chain invalid');
+    prior = sha256(envelope);
+  }
+  assert(prior === pointer.digest, 'predecessor archive final generation digest invalid');
+  const body = envelope.body;
+  assert(body.key_id === calibrationKeyId(publicKey) && body.campaign_id === disposition.campaign_id &&
+    body.calibration_run_id === disposition.calibration_run_id && body.completed_keys.length === 0 &&
+    body.executions.length === 0 && body.attempts.length === 0 && body.result_ref === null,
+  'predecessor archive identity or zero-result disposition mismatch');
+  if (disposition.execution_attempt_ids) assert(canonicalize(body.execution_attempts.map(item => item.execution_attempt_id).sort()) ===
+    canonicalize([...disposition.execution_attempt_ids].sort()), 'predecessor failed-attempt lineage mismatch');
+  return Object.freeze({ archive_head: clone(disposition.archive_head), archive_tree_digest: disposition.archive_tree_digest,
+    campaign_id: body.campaign_id, calibration_run_id: body.calibration_run_id });
+}
 const deepFreeze = value => {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
     for (const child of Object.values(value)) deepFreeze(child);
@@ -281,7 +329,7 @@ export async function createCalibrationDeploymentArtifacts({
   assert(typeof campaignId === 'string' && campaignId.length > 0 && typeof calibrationRunId === 'string' && calibrationRunId.length > 0,
     'campaign and calibration run identifiers are required');
   if (predecessorFailedCampaign !== null) assert(predecessorFailedCampaign.reference_type === 'PREDECESSOR_FAILED_CAMPAIGN' &&
-    predecessorFailedCampaign.disposition === 'FAILED_PRE_CALIBRATION_EXECUTION' &&
+    ['FAILED_PRE_CALIBRATION_EXECUTION', 'FAILED_BEFORE_CALIBRATION_RESULT'].includes(predecessorFailedCampaign.disposition) &&
     predecessorFailedCampaign.parameter_vectors_successfully_evaluated === 0 &&
     predecessorFailedCampaign.calibration_seeds_completed === 0 &&
     canonicalize(predecessorFailedCampaign.imported_completed_keys) === '[]',

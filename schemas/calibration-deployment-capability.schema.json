@@ -44,7 +44,7 @@
       "required": ["reference_type", "disposition", "campaign_id", "calibration_run_id", "archive_head", "archive_tree_digest", "disposition_record_hash", "parameter_vectors_successfully_evaluated", "calibration_seeds_completed", "imported_completed_keys"],
       "properties": {
         "reference_type": {"const": "PREDECESSOR_FAILED_CAMPAIGN"},
-        "disposition": {"const": "FAILED_PRE_CALIBRATION_EXECUTION"},
+        "disposition": {"enum": ["FAILED_PRE_CALIBRATION_EXECUTION", "FAILED_BEFORE_CALIBRATION_RESULT"]},
         "campaign_id": {"type": "string", "minLength": 1},
         "calibration_run_id": {"type": "string", "minLength": 1},
         "archive_head": {"type": "object", "additionalProperties": false, "required": ["generation", "digest"], "properties": {"generation": {"type": "integer", "minimum": 0}, "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}},

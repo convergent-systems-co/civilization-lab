@@ -202,6 +202,36 @@ text-bearing base64 evidence envelopes before selector admission.
   evidence trust roots, distinct archive-signing and attestation keys are
   supplied. This repository
   state does not itself authorize empirical calibration.
+- `npm run calibration:evidence:probe -- --deployment-root /absolute/path/to/deployment --iterations 2`
+  runs a non-empirical commit probe through the real pinned HTTPS client,
+  production evidence authority, durable object/finalization store, signed head,
+  restart reconciliation, idempotent duplicate path, and conflicting-duplicate
+  rejection. Probe receipts are explicitly `NON_EMPIRICAL_DIAGNOSTIC` and the
+  probe uses isolated temporary storage; it cannot write the empirical archive.
+- Production HTTPS request ingestion permits 512 MiB and the isolated adapter
+  protocol permits 768 MiB. These bounds exceed the measured 157,895,011-byte
+  frozen 20-turn request. The prior 64 MiB request ceiling was the root cause of
+  the stopped replacement campaign's pre-finalization authority failure. Bearer
+  authentication, declared-length rejection, and a bounded concurrent-request
+  gate run before body buffering. The client independently bounds responses.
+- Authority operations use an OS-released SQLite process mutex, and immutable
+  finalization claims bind the complete request, evidence object, policy,
+  apparatus, and input hash before object persistence. A signed observation
+  drives any durable pending transaction to its single authoritative state.
+- Empirical verification accepts `--historical-distribution allow-read-only`
+  only with `--historical-trust-policy` naming the snapshot pinned by that
+  capability and release and the signed revocation registry captured at
+  issuance. Capability expiry does not erase historical verifiability, while
+  adapter execute/recover are disabled in historical mode. This path creates no
+  directories or SQLite lock and performs no transaction recovery. An incomplete archive reports
+  `VALID_PARTIAL_CAMPAIGN`; it reports `VALID_FAILED_PARTIAL_CAMPAIGN` only when
+  `--failed-campaign-disposition` exactly binds its signed identity, retained
+  head, failed attempts, and zero-result state. Neither status is a successful
+  calibration result or a resume authorization.
+- New provisioning requires the preserved predecessor archive and its external
+  archive public key. It independently verifies the archive tree, signed final
+  generation, identity, head, failed-attempt lineage, and zero imported results
+  before signing a successor capability.
 - `npm run check` validates schemas, tests adversarial behavior, and builds the
   distributable runtime.
 
