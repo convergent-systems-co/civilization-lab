@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration-deployment-trust-policy.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "status", "approved_release_key_ids", "approved_authorization_key_ids"],
+  "properties": {
+    "version": {"const": "phase-a-deployment-trust-policy-1.0.0"},
+    "status": {"enum": ["PROVISIONED", "UNPROVISIONED_FAIL_CLOSED"]},
+    "approved_release_key_ids": {"type": "array", "maxItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+    "approved_authorization_key_ids": {"type": "array", "maxItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "PROVISIONED"}}},
+      "then": {
+        "properties": {
+          "approved_release_key_ids": {"minItems": 1},
+          "approved_authorization_key_ids": {"minItems": 1}
+        }
+      },
+      "else": {
+        "properties": {
+          "approved_release_key_ids": {"maxItems": 0},
+          "approved_authorization_key_ids": {"maxItems": 0}
+        }
+      }
+    }
+  ]
+}

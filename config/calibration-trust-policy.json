@@ -1,6 +1,10 @@
 {
   "version": "phase-a-deployment-trust-policy-1.0.0",
-  "status": "UNPROVISIONED_FAIL_CLOSED",
-  "approved_release_key_ids": [],
-  "approved_authorization_key_ids": []
+  "status": "PROVISIONED",
+  "approved_release_key_ids": [
+    "6abf946bd450fedb21196d15f5b95081bae54b85b1b1bf28a3ad7fba17a4f372"
+  ],
+  "approved_authorization_key_ids": [
+    "dbcb66bf85da4cade25ad798ffcda75ca5bbf711157280f3100150810f86b128"
+  ]
 }

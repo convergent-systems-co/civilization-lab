@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0.0",
+  "review_version": "phase-a-production-trust-review-1.0.0",
+  "observed_on": "2026-09-12",
+  "scope": "Production-equivalent local Phase A trust provisioning and non-empirical conformance only",
+  "status": "PASS",
+  "deployment": {
+    "deployment_id": "6bb89ea7ab440882b18c62c2a5cf2ba4332c7d06c8b0d633ebd5fbe19c642bf4",
+    "deployment_class": "PRODUCTION_EQUIVALENT_LOCAL",
+    "evidence_endpoint": "https://127.0.0.1:9443/v1/execution-intents",
+    "transport": "HTTPS_WITH_SIGNED_CAMPAIGN_CA_PIN",
+    "private_material_committed": false,
+    "empirical_evidence_committed": false
+  },
+  "immutable_references": {
+    "validated_software_baseline": "8f06baae4cda7d6fbd9d61924b5c615f4a45ba59",
+    "validated_software_tag": "v0.1.0-pilot0",
+    "calibration_protocol_preparation": "fd74a15291e98478264cc6565b196e1e8af0304e",
+    "calibration_tooling_baseline": "abfd80144db2fd85549447cc5638fabfb70053ba",
+    "calibration_tooling_implementation": "ae71225469b5c8d5316c6942007df20284bf292a",
+    "release_descriptor_sha256": "0610f903b9ca049875741aba64bc4737d37e113fbd778ea7541a1922a4b48155",
+    "authorization_capability_sha256": "75f97c6e51a061b743d212172dbb6497e93091f00e4010c27d8873f00e59087a",
+    "evidence_runtime_descriptor_sha256": "7fccab424344ce8cefd13358b9d03d7ae06af25b3a38bf2587d4e328e6743fc5"
+  },
+  "authority_separation": {
+    "status": "PASS",
+    "release_key_id": "6abf946bd450fedb21196d15f5b95081bae54b85b1b1bf28a3ad7fba17a4f372",
+    "calibration_authorization_key_id": "dbcb66bf85da4cade25ad798ffcda75ca5bbf711157280f3100150810f86b128",
+    "archive_key_id": "8aef2adf44505963145ce99a59e14e40f8375f3ae0700d6e1095967ceaa88cc7",
+    "attestation_key_id": "fafc6ae40b4e172060bc9015cfa32b9e34acc0c318b550521178843c90d3fa40",
+    "evidence_key_id": "9d938be1186a0e67ca08aa41a5849887cb67e7c3ad4b230a3e10115bd913b7df",
+    "evidence_head_key_id": "800ca454c71a3559c45048b05f28a48f483f1804d8cc1696cfc38da030be9654",
+    "all_key_ids_distinct": true
+  },
+  "live_preflight": {
+    "initial_start": "PASS",
+    "restart": "PASS",
+    "signed_distribution": true,
+    "pinned_https": true,
+    "unauthorized_finalization_rejected": true,
+    "empirical_calibration_executed": false,
+    "canonical_evidence_records_created": 0
+  },
+  "validation": {
+    "contract_validation": "PASS: 60 schemas, 25 catalogue entries, Pilot 0 and calibration contracts",
+    "build": "PASS",
+    "focused_trust_suite": {
+      "total": 20,
+      "passed": 20,
+      "failed": 0,
+      "skipped": 0
+    },
+    "browser_and_accessibility_suite": {
+      "total": 49,
+      "passed": 49,
+      "failed": 0,
+      "skipped": 0
+    },
+    "full_repository_suite": {
+      "total": 868,
+      "passed": 868,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "adversarial_checks": [
+    "unsigned or wrong-key release",
+    "expired, malformed, revoked, or wrong-scope calibration capability",
+    "mismatched baseline, protocol, policy package, registry, seed, or parameter vector",
+    "forged evidence and forged attestation",
+    "tampered archive and stale or conflicting evidence head",
+    "cross-authority key reuse",
+    "missing, substituted, or untrusted HTTPS identity",
+    "wrong evidence endpoint or unavailable archive",
+    "process crash and durable restart",
+    "credential absence and substitution",
+    "evidence-signing request outside fixed campaign authorization"
+  ],
+  "p0_findings": [],
+  "p1_findings": [],
+  "resolved_p1_findings": [
+    "provisioned signed null head prevents missing-anchor rollback rebootstrap",
+    "signed successor revocation registries are accepted and reread before production requests",
+    "revocation state is independently anchored with direct succession and cumulative-set enforcement"
+  ],
+  "research_design_blockers": [],
+  "infrastructure_blockers": [],
+  "world_calibration_machine_authorized": true,
+  "empirical_calibration_executed": false,
+  "pilot_0_research_authorized": false,
+  "confirmatory_execution_authorized": false
+}

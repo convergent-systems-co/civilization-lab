@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration-deployment-public-authority.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["role", "algorithm", "key_id", "public_key_file", "public_key_sha256", "revocation_status"],
+  "properties": {
+    "role": {"enum": ["release", "calibration_authorization", "archive", "attestation", "evidence", "evidence_head"]},
+    "algorithm": {"const": "Ed25519"},
+    "key_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "public_key_file": {"type": "string", "pattern": "^[a-z_]+-public\\.pem$"},
+    "public_key_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "revocation_status": {"const": "ACTIVE"}
+  }
+}

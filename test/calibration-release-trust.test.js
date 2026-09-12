@@ -45,13 +45,18 @@ async function context() {
   const source = `${executeSource}\n${recoverSource}\nexport const calibrationAdapter = { contract: ${JSON.stringify(contract)}, execute, recover };\n`;
   await writeFile(modulePath, source);
   await mkdir(join(directory, "config"));
+  const authorityCaBytes = "-----BEGIN CERTIFICATE-----\nSYNTHETIC-CONFORMANCE-ONLY\n-----END CERTIFICATE-----\n";
+  const authorityCaHash = createHash("sha256").update(authorityCaBytes).digest("hex");
   const authorityConfigBytes = JSON.stringify({ version: "phase-a-evidence-authority-client-1.1.0",
     request_version: "phase-a-evidence-authority-request-1.1.0", endpoint: "https://evidence-authority.invalid/v1/execution-intents",
-    request_timeout_ms: 1000, worker_timeout_ms: 5000, transport: "HTTPS_PRODUCTION" }) + "\n";
+    request_timeout_ms: 1000, worker_timeout_ms: 5000, transport: "HTTPS_PRODUCTION",
+    tls_ca_resource: "config/calibration-evidence-authority-ca.pem", tls_ca_sha256: authorityCaHash }) + "\n";
   await writeFile(join(directory, "config/calibration-evidence-authority.json"), authorityConfigBytes);
+  await writeFile(join(directory, "config/calibration-evidence-authority-ca.pem"), authorityCaBytes);
   const declaration = { entrypoint: "adapter.mjs", files: {
     "adapter.mjs": createHash("sha256").update(source).digest("hex"),
-    "config/calibration-evidence-authority.json": createHash("sha256").update(authorityConfigBytes).digest("hex") },
+    "config/calibration-evidence-authority.json": createHash("sha256").update(authorityConfigBytes).digest("hex"),
+    "config/calibration-evidence-authority-ca.pem": authorityCaHash },
     permissions: { child_process: false, environment: ["CIVLAB_CALIBRATION_EVIDENCE_AUTH_TOKEN"], fs_read: [], fs_write: [],
       network: ["evidence-authority.invalid"], worker: false, worker_timeout_ms: 5000 } };
   const releaseBody = { version: "phase-a-calibration-release-1.0.0", tooling_version: CALIBRATION_TOOLING_VERSION,
@@ -205,11 +210,14 @@ test("signed worker deadline fails with a typed infrastructure status and recove
   await writeFile(c.modulePath, source);
   const configBytes = JSON.stringify({ version: "phase-a-evidence-authority-client-1.1.0",
     request_version: "phase-a-evidence-authority-request-1.1.0", endpoint: "https://evidence-authority.invalid/v1/execution-intents",
-    request_timeout_ms: 1000, worker_timeout_ms: 1000, transport: "HTTPS_PRODUCTION" }) + "\n";
+    request_timeout_ms: 1000, worker_timeout_ms: 1000, transport: "HTTPS_PRODUCTION",
+    tls_ca_resource: "config/calibration-evidence-authority-ca.pem",
+    tls_ca_sha256: c.body.adapter_executable.files["config/calibration-evidence-authority-ca.pem"] }) + "\n";
   await writeFile(join(c.modulePath, "../config/calibration-evidence-authority.json"), configBytes);
   const declaration = { ...c.body.adapter_executable, files: {
     "adapter.mjs": createHash("sha256").update(source).digest("hex"),
-    "config/calibration-evidence-authority.json": createHash("sha256").update(configBytes).digest("hex") },
+    "config/calibration-evidence-authority.json": createHash("sha256").update(configBytes).digest("hex"),
+    "config/calibration-evidence-authority-ca.pem": c.body.adapter_executable.files["config/calibration-evidence-authority-ca.pem"] },
     permissions: { ...c.body.adapter_executable.permissions, worker_timeout_ms: 1000 } };
   const authorized = authorizeDeclaration(c, declaration, contract);
   const adapter = await loadCalibrationExecutionModule(c.modulePath, authorized.capability, authorized.options);

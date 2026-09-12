@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration-evidence-authority-head.schema.json",
+  "title": "Phase A production evidence-authority monotonic head",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "authority_id", "generation", "parent", "execution_intent_id", "run_id", "finalized_record_hash", "evidence_object_hash", "evidence_key_id", "evidence_head_key_id"],
+  "properties": {
+    "version": { "const": "phase-a-evidence-authority-head-1.0.0" },
+    "authority_id": { "type": "string", "minLength": 3, "maxLength": 128 },
+    "generation": { "type": "integer", "minimum": 0 },
+    "parent": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+    "execution_intent_id": { "type": "string", "minLength": 1, "maxLength": 192 },
+    "run_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "finalized_record_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "evidence_object_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "evidence_key_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "evidence_head_key_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

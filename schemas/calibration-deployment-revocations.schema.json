@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration-deployment-revocations.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "generation", "parent_registry_hash", "ancestor_registry_hashes", "generated_at", "authority_key_id", "revoked_key_ids", "revoked_capability_hashes", "public_key", "signature"],
+  "properties": {
+    "version": {"const": "phase-a-revocation-registry-1.0.0"},
+    "generation": {"type": "integer", "minimum": 0},
+    "parent_registry_hash": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "ancestor_registry_hashes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+    "generated_at": {"type": "string", "minLength": 20},
+    "authority_key_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "revoked_key_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+    "revoked_capability_hashes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+    "public_key": {"type": "string", "minLength": 80},
+    "signature": {"type": "string", "minLength": 80}
+  }
+}

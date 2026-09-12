@@ -221,7 +221,7 @@ test("a clone that cannot resolve the baseline tag fails validation readably, no
   assert.doesNotMatch(validation.stderr, /AssertionError|^\s+at /m);
 });
 
-test("ratified Phase A propagation changes only its authorized specifications", () => {
+test("production trust provisioning changes no authoritative research specifications", () => {
   const specs = readdirSync(root, { recursive: true, withFileTypes: true })
     .filter(entry => entry.isFile() && /\.spec\./.test(entry.name) && !entry.parentPath.includes("node_modules") && !entry.parentPath.includes(".git"))
     .map(entry => join(entry.parentPath, entry.name).slice(root.length + 1))
@@ -237,16 +237,14 @@ test("ratified Phase A propagation changes only its authorized specifications", 
   const base = git("merge-base", "HEAD", trunk).stdout.trim();
   assert.match(base, /^[0-9a-f]{40}$/, `cannot resolve a merge base between HEAD and ${trunk}`);
 
-  // origin/main intentionally contains protocol 1.0.0. The ratified no-Qwen
-  // decision authorizes this branch's 1.1.0 protocol and parameter-registry
-  // propagation; every unrelated pre-existing specification remains immutable.
+  // The merged Phase A baseline already contains the ratified no-Qwen 1.1.0
+  // protocol. Production trust provisioning must not alter any research spec.
   const protocolAtBase = git("show", `${base}:PILOT_0_CALIBRATION_PROTOCOL.spec.json`);
   assert.equal(protocolAtBase.status, 0, `comparison base ${base} (${trunk}) predates the calibration protocol freeze`);
-  assert.equal(JSON.parse(protocolAtBase.stdout).protocol_version, "pilot-0-calibration-1.0.0");
+  assert.equal(JSON.parse(protocolAtBase.stdout).protocol_version, PROTOCOL_VERSION);
   assert.equal(JSON.parse(readFileSync(join(root, "PILOT_0_CALIBRATION_PROTOCOL.spec.json"), "utf8")).protocol_version, PROTOCOL_VERSION);
 
-  const authorized = new Set(["PILOT_0_CALIBRATION_PROTOCOL.spec.json", "PARAMETER_REGISTRY.spec.json"]);
-  const diff = git("diff", "--name-only", base, "--", ...specs.filter(path => !authorized.has(path)));
+  const diff = git("diff", "--name-only", base, "--", ...specs);
   assert.equal(diff.status, 0, diff.stderr);
   assert.deepEqual(diff.stdout.split("\n").filter(Boolean), [], "this branch modifies an unrelated frozen specification");
 });

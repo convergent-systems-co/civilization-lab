@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration-evidence-authority-config.schema.json",
+  "title": "Phase A production evidence-authority deployment configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "authority_id", "listen_host", "listen_port", "storage_directory", "tls_certificate_path", "tls_private_key_path", "credential_path", "evidence_private_key_path", "evidence_head_private_key_path", "trusted_head_directory", "archive_directory", "authorization_capability_path", "authorization_public_key_path", "release_descriptor_path", "release_public_key_path", "revocation_registry_path", "trust_policy_path"],
+  "properties": {
+    "version": { "const": "phase-a-production-evidence-authority-config-1.0.0" },
+    "authority_id": { "type": "string", "minLength": 3, "maxLength": 128 },
+    "listen_host": { "type": "string", "minLength": 1, "maxLength": 255 },
+    "listen_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "storage_directory": { "type": "string", "minLength": 1 },
+    "tls_certificate_path": { "type": "string", "minLength": 1 },
+    "tls_private_key_path": { "type": "string", "minLength": 1 },
+    "credential_path": { "type": "string", "minLength": 1 },
+    "evidence_private_key_path": { "type": "string", "minLength": 1 },
+    "evidence_head_private_key_path": { "type": "string", "minLength": 1 },
+    "trusted_head_directory": { "type": "string", "minLength": 1 },
+    "archive_directory": { "type": "string", "minLength": 1 },
+    "authorization_capability_path": { "type": "string", "minLength": 1 },
+    "authorization_public_key_path": { "type": "string", "minLength": 1 },
+    "release_descriptor_path": { "type": "string", "minLength": 1 },
+    "release_public_key_path": { "type": "string", "minLength": 1 },
+    "revocation_registry_path": { "type": "string", "minLength": 1 },
+    "trust_policy_path": { "type": "string", "minLength": 1 }
+  }
+}
