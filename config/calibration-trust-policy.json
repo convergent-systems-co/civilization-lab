@@ -2,9 +2,9 @@
   "version": "phase-a-deployment-trust-policy-1.0.0",
   "status": "PROVISIONED",
   "approved_release_key_ids": [
-    "0f95ec9ae976fb9b329fe21c6e2a1a302b062cb3e2a433f34efdd7ba9a214237"
+    "c0f4095e8a0d35f7c0e2abb5d8c258cfd2ef7c9721c77b74b68f2c3e12db92bd"
   ],
   "approved_authorization_key_ids": [
-    "f66dd8758f991646a6ae2d9edf14c9f22a1b0f90b0c8173266c1be9a083d8a78"
+    "4243bf8550ffff46f060712243340ed105ec649ba30e317c4f1a0f5a362e7f9c"
   ]
 }
