@@ -21,7 +21,7 @@ import {
 const root = resolve(import.meta.dirname, '..');
 const baseline = '8f06baae4cda7d6fbd9d61924b5c615f4a45ba59';
 const toolingHead = 'abfd80144db2fd85549447cc5638fabfb70053ba';
-const toolingImplementation = 'ae71225469b5c8d5316c6942007df20284bf292a';
+const toolingImplementation = 'f00f30cd5763253e140925562ab5e340ef59046d';
 const protocolPreparation = 'fd74a15291e98478264cc6565b196e1e8af0304e';
 
 async function fixture() {
