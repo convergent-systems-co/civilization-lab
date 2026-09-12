@@ -39,7 +39,7 @@ const FROZEN_REFERENCES = Object.freeze({
   baseline: '8f06baae4cda7d6fbd9d61924b5c615f4a45ba59',
   protocol_preparation: 'fd74a15291e98478264cc6565b196e1e8af0304e',
   calibration_tooling: 'abfd80144db2fd85549447cc5638fabfb70053ba',
-  calibration_tooling_implementation: 'ae71225469b5c8d5316c6942007df20284bf292a'
+  calibration_tooling_implementation: 'f00f30cd5763253e140925562ab5e340ef59046d'
 });
 const pemPublic = key => key.export({ type: 'spki', format: 'pem' });
 const pemPrivate = key => key.export({ type: 'pkcs8', format: 'pem' });
