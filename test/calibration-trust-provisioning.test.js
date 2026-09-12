@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { X509Certificate, createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, realpath, stat, symlink } from 'node:fs/promises';
+import { X509Certificate, createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify } from 'node:crypto';
+import { mkdtemp, mkdir, readFile, readdir, realpath, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { canonicalize, sha256 } from '../src/core.js';
@@ -10,11 +10,12 @@ import { calibrationProtocol } from '../src/calibration.js';
 import { parameterRegistry } from '../src/parameters.js';
 import { PHASE_A_POLICY_MANIFEST, PHASE_A_POLICY_PACKAGE, PHASE_A_POLICY_PACKAGE_HASH } from '../src/calibration-policy.js';
 import { PHASE_A_MODEL_RUNTIME_LOCK_HASH } from '../src/calibration-runtime.js';
-import { assertCalibrationRevocationStatus, calibrationKeyId } from '../src/calibration-runner.js';
+import { assertCalibrationRevocationStatus, assertEmpiricalCapability, calibrationKeyId } from '../src/calibration-runner.js';
 import {
   AUTHORITY_ROLES,
   createCalibrationDeploymentArtifacts,
   provisionCalibrationAuthorities,
+  verifyFailedPredecessorArchive,
   writeCalibrationEvidenceAuthorityConfiguration
 } from '../src/calibration-trust-provisioning.js';
 
@@ -39,6 +40,45 @@ async function fixture() {
   });
   return { parent, privateDirectory, publicDirectory, archiveDirectory, provisioned };
 }
+
+async function treeDigest(directory) {
+  const paths = [];
+  async function walk(path) {
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      const child = join(path, entry.name);
+      if (entry.isDirectory()) await walk(child); else paths.push(child);
+    }
+  }
+  await walk(directory); paths.sort();
+  const lines = [];
+  for (const path of paths) lines.push(`${createHash('sha256').update(await readFile(path)).digest('hex')}  ${path}\n`);
+  return createHash('sha256').update(lines.join('')).digest('hex');
+}
+
+test('predecessor issuance verifies signed identity, exact head/tree, zero state, and failed-attempt lineage', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'civilizationlab-predecessor-proof-'));
+  await mkdir(join(directory, 'generations'), { mode: 0o700 });
+  const key = generateKeyPairSync('ed25519');
+  const body = { generation: 0, parent_generation_digest: null, key_id: calibrationKeyId(key.publicKey), campaign_id: 'failed-campaign',
+    calibration_run_id: 'failed-run', completed_keys: [], executions: [], attempts: [], result_ref: null,
+    execution_attempts: [{ execution_attempt_id: 'failed-attempt-1' }] };
+  const envelope = { body, signature: sign(null, Buffer.from(canonicalize(body)), key.privateKey).toString('base64') };
+  const head = { generation: 0, digest: sha256(envelope) };
+  await writeFile(join(directory, 'generations/000000000000.json'), canonicalize(envelope) + '\n');
+  await writeFile(join(directory, 'state.json'), canonicalize({ ...head, key_id: body.key_id }));
+  const disposition = { disposition: 'FAILED_BEFORE_CALIBRATION_RESULT', campaign_id: body.campaign_id,
+    calibration_run_id: body.calibration_run_id, archive_head: head, archive_tree_digest: await treeDigest(directory),
+    parameter_vectors_successfully_evaluated: 0, calibration_seeds_completed: 0,
+    execution_attempt_ids: ['failed-attempt-1'] };
+  const publicKey = key.publicKey.export({ format: 'pem', type: 'spki' });
+  await assert.doesNotReject(verifyFailedPredecessorArchive({ disposition, directory, publicKey }));
+  for (const changed of [{ campaign_id: 'wrong-id' }, { archive_tree_digest: '0'.repeat(64) },
+    { archive_head: { ...head, digest: '1'.repeat(64) } }, { execution_attempt_ids: ['substitution'] }])
+    await assert.rejects(verifyFailedPredecessorArchive({ disposition: { ...disposition, ...changed }, directory, publicKey }),
+      /predecessor/);
+  const unrelated = generateKeyPairSync('ed25519').publicKey.export({ format: 'pem', type: 'spki' });
+  await assert.rejects(verifyFailedPredecessorArchive({ disposition, directory, publicKey: unrelated }), /pointer key|signature/);
+});
 
 test('provisions six distinct Ed25519 authorities and a local TLS identity without exposing secrets', async () => {
   const { privateDirectory, publicDirectory, provisioned } = await fixture();
@@ -122,6 +162,13 @@ test('generates schema-valid signed release and narrowly scoped Phase A capabili
   assert.equal(artifacts.authorization_capability.parameter_domain_hash, sha256(protocol.parameter_domains));
   assert.ok(artifacts.authorization_capability.expires_at_ms > artifacts.authorization_capability.not_before_ms);
   assert.equal(artifacts.authorization_capability.revocation.status, 'NOT_REVOKED_AT_ISSUANCE');
+  const capabilityTrust = { archiveDirectory,
+    authorizationTrust: await readFile(provisioned.authorities.calibration_authorization.public_key_path, 'utf8'),
+    releaseDescriptor: artifacts.release_descriptor,
+    releaseTrust: await readFile(provisioned.authorities.release.public_key_path, 'utf8'),
+    trustPolicy: artifacts.trust_policy, revocationRegistry: artifacts.revocations };
+  assert.doesNotThrow(() => assertEmpiricalCapability(artifacts.authorization_capability,
+    { ...capabilityTrust, now: artifacts.authorization_capability.expires_at_ms + 1, historicalDistribution: true }));
   assert.throws(() => artifacts.authorization_capability.prohibited_scopes.sort(), TypeError);
   for (const [artifact, role] of [[artifacts.release_descriptor, 'release'], [artifacts.authorization_capability, 'calibration_authorization']]) {
     const body = structuredClone(artifact); delete body.signature; delete body.public_key;

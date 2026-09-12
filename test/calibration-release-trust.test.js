@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { canonicalize, sha256 } from "../src/core.js";
@@ -10,7 +10,7 @@ import { parameterRegistry } from "../src/parameters.js";
 import { calibrationProtocol } from "../src/calibration.js";
 import { ACTION_CONTRACT_HASH } from "../src/contracts.js";
 import { PHASE_A_POLICY_PACKAGE, PHASE_A_POLICY_PACKAGE_HASH } from "../src/calibration-policy.js";
-import { assertCalibrationReleaseTrust, assertEmpiricalCalibrationAuthorization, CalibrationArchive, calibrationKeyId,
+import { assertCalibrationReleaseTrust, assertEmpiricalCalibrationAuthorization, assertEmpiricalCapability, CalibrationArchive, calibrationKeyId,
   calibrationToolingDistributionDigest, calibrationToolingDistributionManifest, resolvedCalibrationBaselineTag,
   CALIBRATION_TOOLING_VERSION, CALIBRATION_MODEL_RUNTIME_LOCK, CALIBRATION_MODEL_RUNTIME_LOCK_HASH,
   PhaseACalibrationRunner, panelDiagnostics, loadCalibrationExecutionModule, assertNeutralReplayCondition,
@@ -20,6 +20,15 @@ const baseline = "8f06baae4cda7d6fbd9d61924b5c615f4a45ba59";
 const projectionContractHash = sha256(JSON.parse(readFileSync(new URL("../PROJECTION_POLICY.spec.json", import.meta.url), "utf8")));
 const pem = key => key.export({ type: "spki", format: "pem" });
 const signed = (body, pair) => ({ ...body, public_key: pem(pair.publicKey), signature: sign(null, Buffer.from(canonicalize(body)), pair.privateKey).toString("base64") });
+async function directorySnapshot(root, base = root) {
+  const rows = [];
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) rows.push(...await directorySnapshot(path, base));
+    else rows.push([path.slice(base.length + 1), sha256(await readFile(path))]);
+  }
+  return rows.sort((left, right) => left[0].localeCompare(right[0]));
+}
 async function context() {
   const releasePair = generateKeyPairSync("ed25519"), authority = generateKeyPairSync("ed25519"),
     archivePair = generateKeyPairSync("ed25519"), attestorPair = generateKeyPairSync("ed25519"),
@@ -100,6 +109,16 @@ test("release hashes actual bytes of reducers, evidence, schemas, contracts, con
   assert.equal(resolvedCalibrationBaselineTag(), baseline);
 });
 
+test("historical read-only verification honors the signed distribution while current execution rejects it", async () => {
+  const c = await context();
+  const historicalBody = { ...c.releaseBody, tooling_distribution_digest: "9".repeat(64) };
+  const historicalRelease = signed(historicalBody, c.releasePair);
+  assert.throws(() => assertCalibrationReleaseTrust(historicalRelease, c.options.releaseTrust, c.trustPolicy),
+    /tooling distribution digest mismatch/);
+  assert.equal(assertCalibrationReleaseTrust(historicalRelease, c.options.releaseTrust, c.trustPolicy,
+    { historicalDistribution: true }).tooling_distribution_digest, "9".repeat(64));
+});
+
 test("calibration runtime lock binds complete Hugging Face model, tokenizer, runtime and source configuration", () => {
   assert.equal(CALIBRATION_MODEL_RUNTIME_LOCK.source, "huggingface");
   assert.equal(CALIBRATION_MODEL_RUNTIME_LOCK.model_kind, "base");
@@ -171,6 +190,53 @@ test("signed empirical authority fixes campaign and calibration run identity for
   await assert.rejects(CalibrationArchive.open(directory, { ...archiveTrust,
     executionBinding: { ...archiveTrust.executionBinding, calibration_run_id: "replacement-run" } }),
   /authorization\/campaign binding mismatch/);
+});
+
+test("predecessor lineage validates identity, digest, zero-state isolation, and exact binding", async () => {
+  const c = await context(), directory = await realpath(await mkdtemp(join(tmpdir(), "calibration-predecessor-binding-")));
+  const predecessor = { reference_type: "PREDECESSOR_FAILED_CAMPAIGN", disposition: "FAILED_PRE_CALIBRATION_EXECUTION",
+    campaign_id: "failed-predecessor-campaign", calibration_run_id: "failed-predecessor-run",
+    archive_head: { generation: 5, digest: "1".repeat(64) }, archive_tree_digest: "2".repeat(64),
+    disposition_record_hash: "3".repeat(64), parameter_vectors_successfully_evaluated: 0,
+    calibration_seeds_completed: 0, imported_completed_keys: [] };
+  const body = { ...c.body, predecessor_failed_campaign: predecessor };
+  const capability = signed(body, c.authority);
+  assert.doesNotThrow(() => assertEmpiricalCapability(capability, c.options));
+  const executionBinding = { authorization_hash: sha256(capability), authorization_key_id: body.key_id,
+    campaign_id: body.campaign_id, calibration_run_id: body.calibration_run_id,
+    attestor_key_id: body.attestor_key_id, predecessor_failed_campaign: predecessor };
+  const archiveTrust = { privateKey: c.archivePair.privateKey, publicKey: c.archivePair.publicKey,
+    keyId: body.archive_key_id, trustScope: "EMPIRICAL_ARCHIVE",
+    releaseBinding: { descriptor_hash: sha256(c.releaseDescriptor) }, executionBinding,
+    attestationAuthority: { privateKey: c.attestorPair.privateKey, publicKey: c.attestorPair.publicKey,
+      keyId: body.attestor_key_id } };
+  const archive = await new CalibrationArchive(directory, archiveTrust).initialize({
+    protocolVersion: calibrationProtocol().protocol_version, implementationCommit: baseline,
+    executionMode: "EMPIRICAL_CALIBRATION" });
+  assert.deepEqual(archive.state.predecessor_failed_campaign, predecessor);
+  assert.deepEqual(archive.state.completed_keys, []);
+  assert.deepEqual(archive.state.attempts, []);
+  assert.deepEqual(archive.state.candidates, []);
+  const failedBeforeResult = { ...predecessor, disposition: "FAILED_BEFORE_CALIBRATION_RESULT" };
+  assert.doesNotThrow(() => assertEmpiricalCapability(signed({ ...body,
+    predecessor_failed_campaign: failedBeforeResult }, c.authority), c.options));
+  const beforeHistoricalOpen = await directorySnapshot(directory);
+  await CalibrationArchive.open(directory, { ...archiveTrust, privateKey: undefined,
+    historicalDistribution: true, toolingDistributionDigest: calibrationToolingDistributionDigest() });
+  assert.deepEqual(await directorySnapshot(directory), beforeHistoricalOpen,
+    "historical archive verification must not create locks, recover transactions, or alter bytes");
+  for (const changed of [
+    { ...predecessor, campaign_id: "wrong-predecessor" },
+    { ...predecessor, archive_tree_digest: "4".repeat(64) },
+    null
+  ]) await assert.rejects(CalibrationArchive.open(directory, { ...archiveTrust, privateKey: undefined,
+    executionBinding: { ...executionBinding, predecessor_failed_campaign: changed } }), /predecessor-failed-campaign binding mismatch/);
+  for (const malformed of [
+    { ...predecessor, imported_completed_keys: ["forbidden-key"] },
+    { ...predecessor, imported_results: ["forbidden-result"] },
+    { ...predecessor, campaign_id: body.campaign_id }
+  ]) assert.throws(() => assertEmpiricalCapability(signed({ ...body, predecessor_failed_campaign: malformed }, c.authority), c.options),
+    /predecessor lineage|imports empirical state/);
 });
 
 test("adapter code, export and pre-import authority are pinned independently of its claimed contract", async () => {

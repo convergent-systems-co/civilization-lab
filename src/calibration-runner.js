@@ -43,11 +43,14 @@ const PROJECTION_CONTRACT_HASH = sha256(JSON.parse(readFileSync(new URL("../PROJ
 export const CALIBRATION_MODEL_RUNTIME_LOCK = PHASE_A_MODEL_RUNTIME_LOCK;
 export const CALIBRATION_MODEL_RUNTIME_LOCK_HASH = PHASE_A_MODEL_RUNTIME_LOCK_HASH;
 const HASH = /^[a-f0-9]{64}$/;
+export const CALIBRATION_ADAPTER_MAX_PROTOCOL_BYTES = 768 * 1024 * 1024;
 const TOOLING_DISTRIBUTION_FILES = Object.freeze([
   "../src/calibration.js", "../src/calibration-metrics.js", "../src/calibration-runner.js",
   "../scripts/calibration-cli.js", "../scripts/calibration-selector.js", "../scripts/calibration-adapter-worker.js",
   "../scripts/calibration-trust-provision.js", "../scripts/calibration-evidence-authority.js",
   "../scripts/calibration-trust-preflight.js",
+  "../scripts/calibration-evidence-commit-probe.js",
+  "../scripts/calibration-authority-trust-audit.js",
   "../PILOT_0_CALIBRATION_PROTOCOL.spec.json", "../PARAMETER_REGISTRY.spec.json",
   "../schemas/calibration-attestation.schema.json", "../schemas/calibration-execution-manifest.schema.json",
   "../schemas/calibration-metric-artifact.schema.json", "../schemas/calibration-result.schema.json",
@@ -93,7 +96,8 @@ function releaseDescriptorBody(descriptor) {
   return body;
 }
 
-export function assertCalibrationReleaseTrust(descriptor, pinnedPublicKey, trustPolicy = deploymentTrustPolicy) {
+export function assertCalibrationReleaseTrust(descriptor, pinnedPublicKey, trustPolicy = deploymentTrustPolicy,
+  { historicalDistribution = false } = {}) {
   if (descriptor?.issued_at !== undefined) assertValidSchema(descriptor, "calibration-deployment-release.schema.json");
   assert(descriptor?.public_key && descriptor?.signature && pinnedPublicKey, "externally pinned calibration release trust required");
   const embedded = createPublicKey(descriptor.public_key), pinned = createPublicKey(pinnedPublicKey);
@@ -101,7 +105,8 @@ export function assertCalibrationReleaseTrust(descriptor, pinnedPublicKey, trust
   const body = releaseDescriptorBody(descriptor);
   assert(body.version === "phase-a-calibration-release-1.0.0" && body.tooling_version === CALIBRATION_TOOLING_VERSION,
     "calibration release descriptor version mismatch");
-  assert(body.tooling_distribution_digest === calibrationToolingDistributionDigest(), "calibration tooling distribution digest mismatch");
+  if (!historicalDistribution)
+    assert(body.tooling_distribution_digest === calibrationToolingDistributionDigest(), "calibration tooling distribution digest mismatch");
   assert(body.baseline_tag === BASELINE_TAG && body.baseline_tag_commit === BASELINE_COMMIT && resolvedCalibrationBaselineTag() === body.baseline_tag_commit,
     "calibration release baseline tag resolution mismatch");
   assert(body.protocol_hash === PROTOCOL_HASH && body.parameter_registry_hash === REGISTRY_HASH,
@@ -126,6 +131,26 @@ function assertDeploymentTrustPolicy(policy, releaseKeyId, authorizationKeyId) {
     policy.approved_release_key_ids.includes(releaseKeyId) && policy.approved_authorization_key_ids.includes(authorizationKeyId),
   "empirical calibration trust roots are not approved by the immutable deployment trust policy");
   return sha256(policy);
+}
+
+export function assertPredecessorFailedCampaign(reference, campaignId, calibrationRunId) {
+  if (reference === null || reference === undefined) return null;
+  const keys = ["archive_head", "archive_tree_digest", "calibration_run_id", "calibration_seeds_completed",
+    "campaign_id", "disposition", "disposition_record_hash", "imported_completed_keys",
+    "parameter_vectors_successfully_evaluated", "reference_type"];
+  assert(reference && !Array.isArray(reference) && canonicalize(Object.keys(reference).sort()) === canonicalize(keys.sort()) &&
+    reference.reference_type === "PREDECESSOR_FAILED_CAMPAIGN" &&
+    ["FAILED_PRE_CALIBRATION_EXECUTION", "FAILED_BEFORE_CALIBRATION_RESULT"].includes(reference.disposition) &&
+    typeof reference.campaign_id === "string" && reference.campaign_id.length > 0 &&
+    typeof reference.calibration_run_id === "string" && reference.calibration_run_id.length > 0 &&
+    reference.campaign_id !== campaignId && reference.calibration_run_id !== calibrationRunId &&
+    Number.isSafeInteger(reference.archive_head?.generation) && reference.archive_head.generation >= 0 &&
+    HASH.test(reference.archive_head?.digest ?? "") && HASH.test(reference.archive_tree_digest ?? "") &&
+    HASH.test(reference.disposition_record_hash ?? "") &&
+    reference.parameter_vectors_successfully_evaluated === 0 && reference.calibration_seeds_completed === 0 &&
+    Array.isArray(reference.imported_completed_keys) && reference.imported_completed_keys.length === 0,
+  "replacement campaign predecessor lineage is malformed, unrelated, or imports empirical state");
+  return clone(reference);
 }
 
 function canonicalArchiveDestination(directory) {
@@ -282,11 +307,11 @@ export function assertNeutralReplayCondition(condition, policyId) {
 
 export function assertEmpiricalCapability(capability, {
   archiveDirectory = null, now = Date.now(), authorizationTrust = null, releaseDescriptor = null, releaseTrust = null,
-  trustPolicy = deploymentTrustPolicy, revocationRegistry = null
+  trustPolicy = deploymentTrustPolicy, revocationRegistry = null, historicalDistribution = false
 } = {}) {
   assert(capability?.public_key && capability?.signature, "empirical calibration requires a separately signed external authorization capability");
   const publicKey = createPublicKey(capability.public_key), body = authorizationBody(capability);
-  const release = assertCalibrationReleaseTrust(releaseDescriptor, releaseTrust, trustPolicy);
+  const release = assertCalibrationReleaseTrust(releaseDescriptor, releaseTrust, trustPolicy, { historicalDistribution });
   assert(authorizationTrust, "separately pinned empirical authorization trust required");
   const pinnedAuthorization = createPublicKey(authorizationTrust);
   const trustPolicyHash = assertDeploymentTrustPolicy(trustPolicy,
@@ -311,8 +336,9 @@ export function assertEmpiricalCapability(capability, {
   assert(body.model_runtime_lock_hash === CALIBRATION_MODEL_RUNTIME_LOCK_HASH, "empirical authorization model-runtime lock mismatch");
   assertNeutralPolicyManifest(body.policy_manifest, body.policy_manifest?.model_use_declared);
   assert(body.policy_manifest_hash === sha256(body.policy_manifest), "empirical authorization policy-manifest hash mismatch");
-  assert(Number.isSafeInteger(body.not_before_ms) && Number.isSafeInteger(body.expires_at_ms) && now >= body.not_before_ms && now <= body.expires_at_ms,
-    "empirical authorization is outside its validity interval");
+  assert(Number.isSafeInteger(body.not_before_ms) && Number.isSafeInteger(body.expires_at_ms) &&
+    (historicalDistribution || now >= body.not_before_ms && now <= body.expires_at_ms),
+  "empirical authorization is outside its validity interval");
   if (archiveDirectory) {
     const requested = assertSecureCalibrationArchiveDirectory(archiveDirectory);
     assert(body.archive_destination_hash === sha256(requested), "empirical authorization archive destination mismatch");
@@ -320,13 +346,18 @@ export function assertEmpiricalCapability(capability, {
   assert(body.key_id === calibrationKeyId(publicKey), "empirical authorization key binding mismatch");
   assert(typeof body.campaign_id === "string" && body.campaign_id.length > 0 && typeof body.calibration_run_id === "string" && body.calibration_run_id.length > 0 &&
     HASH.test(body.archive_key_id) && HASH.test(body.attestor_key_id), "empirical campaign/run and independent archive/attestor authorities must be pinned");
+  assertPredecessorFailedCampaign(body.predecessor_failed_campaign, body.campaign_id, body.calibration_run_id);
   assert(HASH.test(body.evidence_key_id) && HASH.test(body.evidence_head_key_id), "external evidence and trusted-head authorities must be pinned");
   assert(new Set([release.release_key_id, body.key_id, body.archive_key_id, body.attestor_key_id, body.evidence_key_id, body.evidence_head_key_id]).size === 6,
     "release, empirical authorization, archive, attestation, evidence, and evidence-head authorities must be pairwise distinct");
   assert(release.approved_adapter_package_digest === sha256(body.adapter_executable),
     "empirical authorization adapter package differs from release-approved digest");
   assert(verify(null, Buffer.from(canonicalize(body)), publicKey, Buffer.from(capability.signature, "base64")), "empirical authorization signature invalid");
-  assertCalibrationRevocationStatus(capability, revocationRegistry, pinnedAuthorization, release.release_key_id);
+  if (historicalDistribution) {
+    const issuance = inspectCalibrationRevocationStatus(capability, revocationRegistry, pinnedAuthorization, release.release_key_id);
+    assert(issuance.registry_hash === body.revocation.registry_hash && issuance.generation === 0 && !issuance.revoked,
+      "historical verification requires the signed non-revoked issuance registry snapshot");
+  } else assertCalibrationRevocationStatus(capability, revocationRegistry, pinnedAuthorization, release.release_key_id);
   return release;
 }
 
@@ -505,7 +536,7 @@ function adapterWorker(modulePath, declaration, operation, executionRequest = nu
   if (permissions.worker) args.push("--allow-worker");
   args.push(resolve(root, "scripts/calibration-adapter-worker.js"));
   const allowedEnvironment = Object.fromEntries(permissions.environment.filter(name => process.env[name] !== undefined).map(name => [name, process.env[name]]));
-  const child = spawnSync(process.execPath, args, { cwd: dirname(modulePath), encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
+  const child = spawnSync(process.execPath, args, { cwd: dirname(modulePath), encoding: "utf8", maxBuffer: CALIBRATION_ADAPTER_MAX_PROTOCOL_BYTES,
     timeout: permissions.worker_timeout_ms,
     input: canonicalize({ operation, module_path: modulePath, package_hash: expectedPackageDigest,
       package_declaration: declaration, execution_request: executionRequest }),
@@ -587,6 +618,8 @@ export async function loadCalibrationExecutionModule(modulePath, capability, opt
     authorityEndpoint: inspected.contract.model_use_declared === false
       ? signedEvidenceAuthorityConfiguration(path, declaration).endpoint : null };
   const invoke = async (operation, request) => {
+    assert(!options?.historicalDistribution,
+      "historical calibration distribution is inspection-only and cannot execute or recover");
     assertEmpiricalCapability(capability, { ...options, now: Date.now() });
     const response = adapterWorker(path, declaration, operation, request);
     try {
@@ -1191,9 +1224,11 @@ function assertRetainedHistory(prior, next) {
 export class CalibrationArchive {
   constructor(directory, trust = CONFORMANCE_TRUST) {
     this.trust = normalizeTrust(trust);
+    assert(!this.trust.historicalDistribution || !this.trust.privateKey,
+      "historical calibration distribution may be opened read-only only");
     this.directory = this.trust.trustScope === "EMPIRICAL_ARCHIVE" ? canonicalArchiveDestination(directory) : resolve(directory);
     this.state = null; this.head = null;
-    this.distributionDigest = calibrationToolingDistributionDigest();
+    this.distributionDigest = this.trust.toolingDistributionDigest ?? calibrationToolingDistributionDigest();
   }
   async _initializeDirectories() {
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
@@ -1259,13 +1294,23 @@ export class CalibrationArchive {
     }
     return history;
   }
-  async _loadLocked({ skipOrphans = false } = {}) {
-    await this._recoverTransaction();
+  async _loadLocked({ skipOrphans = false, recoverTransactions = true } = {}) {
+    if (recoverTransactions) await this._recoverTransaction();
     const history = await this._history();
     assert(history.length, "calibration archive has no state generation");
     const latest = history.at(-1);
     const pointer = JSON.parse(await readFile(join(this.directory, "state.json"), "utf8"));
     assert(pointer.generation === latest.body.generation && pointer.digest === latest.digest && pointer.key_id === this.trust.keyId, "calibration state pointer mismatch or rollback");
+    if (!recoverTransactions) {
+      const names = (await readdir(join(this.directory, "transactions"))).filter(name => /^\d{12}\.json$/.test(name)).sort();
+      assert(names.length > 0 && Number(names.at(-1).slice(0, 12)) === latest.body.generation,
+        "historical archive has a pending or missing publication transaction and requires authorized recovery");
+      const transaction = JSON.parse(await readFile(join(this.directory, "transactions", names.at(-1)), "utf8"));
+      const transactionBody = this._verifyEnvelope(transaction);
+      assert(transactionBody.kind === "CALIBRATION_PUBLICATION" &&
+        sha256(transactionBody.generation_envelope) === latest.digest,
+      "historical archive transaction does not bind its retained final generation");
+    }
     this.state = clone(latest.body); this.head = { generation: latest.body.generation, digest: latest.digest };
     if (!skipOrphans) await this._assertNoOrphans();
     return this;
@@ -1497,6 +1542,8 @@ export class CalibrationArchive {
   static async open(directory, trust = CONFORMANCE_TRUST) {
     const archive = new CalibrationArchive(directory, trust);
     await stat(join(archive.directory, "generations"));
+    if (archive.trust.historicalDistribution)
+      return archive._loadLocked({ recoverTransactions: false });
     return archive._exclusive(() => archive._loadLocked());
   }
   async update(mutator, { expectedHead = this.head?.digest ?? null } = {}) {
@@ -1748,8 +1795,10 @@ export class CalibrationArchive {
   }
   async verify({ trustedKeys = {} } = {}) {
     assert(Object.keys(trustedKeys).length > 0, "external trust binding required for every calibration archive");
-    const freshDistribution = calibrationToolingDistributionDigest({ refresh: true });
-    assert(freshDistribution === this.distributionDigest, "calibration tooling changed during archive verification");
+    if (!this.trust.historicalDistribution) {
+      const freshDistribution = calibrationToolingDistributionDigest({ refresh: true });
+      assert(freshDistribution === this.distributionDigest, "calibration tooling changed during archive verification");
+    }
     const opened = await CalibrationArchive.open(this.directory, this.trust);
     const empirical = opened.state.execution_mode === "EMPIRICAL_CALIBRATION";
     if (empirical) {

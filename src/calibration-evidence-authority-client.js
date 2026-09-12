@@ -6,6 +6,8 @@ import { CalibrationExecutionError, authorityAuthorization, authorityProtocol,
 import { assertValidSchema } from './schema.js';
 
 const POSITIVE_TIMEOUT = value => Number.isSafeInteger(value) && value > 0 && value <= 300_000;
+const HASH = /^[a-f0-9]{64}$/;
+const MAX_RESPONSE_BYTES = 768 * 1024 * 1024;
 const keyIdentifier = key => createHash('sha256').update(key.export({ type: 'spki', format: 'der' })).digest('hex');
 
 function validateObservationState(body) {
@@ -50,9 +52,14 @@ function pinnedHttpsFetch(certificateAuthority) {
       headers: options.headers,
       signal: options.signal
     }, response => {
-      const chunks = [];
-      response.on('data', chunk => chunks.push(chunk));
+      const chunks = []; let size = 0, exceeded = false;
+      response.on('data', chunk => {
+        size += chunk.length;
+        if (size > MAX_RESPONSE_BYTES) { exceeded = true; request.destroy(new Error('authority response exceeds limit')); return; }
+        chunks.push(chunk);
+      });
       response.on('end', () => {
+        if (exceeded) return;
         const body = Buffer.concat(chunks).toString('utf8');
         resolve({ ok: response.statusCode >= 200 && response.statusCode < 300,
           status: response.statusCode,
@@ -76,6 +83,13 @@ export function createEvidenceAuthorityClient({ configuration, credential, fetch
   if (locked.transport === 'INSECURE_LOOPBACK_CONFORMANCE_ONLY' && fetchImplementation === null)
     fetchImplementation = globalThis.fetch;
   assert(typeof fetchImplementation === 'function', 'evidence authority fetch implementation unavailable');
+  const receiptKey = () => {
+    let key;
+    try { key = createPublicKey(locked.observation_public_key); }
+    catch { throw authorityProtocol('signed authority receipt trust key unavailable'); }
+    if (key.asymmetricKeyType !== 'ed25519') throw authorityProtocol('signed authority receipt trust key invalid');
+    return key;
+  };
   const token = typeof credential === 'function' ? credential : () => credential;
   async function request(operation, input) {
     let bearer;
@@ -141,8 +155,40 @@ export function createEvidenceAuthorityClient({ configuration, credential, fetch
     } catch { throw authorityProtocol('signed authority observation invalid'); }
     return { observation: clone(observation) };
   };
+  const finalize = async input => {
+    const result = await request('FINALIZE_EXECUTION_INTENT', input), key = receiptKey();
+    try {
+      const verifyEnvelope = (value, label) => {
+        assert(value && canonicalize(Object.keys(value).sort()) === canonicalize(['body','signature']),
+          `${label} envelope malformed`);
+        assert(verify(null, Buffer.from(canonicalize(value.body)), key,
+          Buffer.from(value.signature ?? '', 'base64')), `${label} signature invalid`);
+        return value.body;
+      };
+      const head = verifyEnvelope(result.evidence_head_receipt, 'evidence-head receipt');
+      const adapter = verifyEnvelope(result.adapter_execution_receipt, 'adapter execution receipt');
+      assert(result.bundle?.run_id === input.bundle?.run_id &&
+        canonicalize(result.bundle) === canonicalize(input.bundle), 'authority finalized bundle mismatch');
+      assert(head.version === 'phase-a-evidence-head-1.0.0' && head.run_id === input.bundle.run_id &&
+        head.adapter_hash === input.adapterHash && HASH.test(head.evidence_key_id) &&
+        Number.isSafeInteger(head.head?.generation) && HASH.test(head.head?.digest),
+      'evidence-head receipt binding invalid');
+      assert(adapter.version === 'phase-a-adapter-execution-receipt-1.0.0' &&
+        adapter.mode === head.mode && adapter.run_id === input.bundle.run_id && adapter.seed === input.request.seed &&
+        adapter.parameter_set_hash === input.binding.calibration_parameter_set_hash &&
+        adapter.execution_request_hash === sha256(input.request) &&
+        adapter.policy_manifest_hash === input.binding.policy_manifest_hash && adapter.adapter_hash === input.adapterHash &&
+        adapter.adapter_executable_hash === input.adapterPackageDigest &&
+        adapter.adapter_package_digest === input.adapterPackageDigest && adapter.evidence_hash === sha256(input.bundle),
+      'adapter execution receipt binding invalid');
+    } catch (error) {
+      if (error instanceof CalibrationExecutionError) throw error;
+      throw authorityProtocol('signed authority finalization receipt invalid');
+    }
+    return result;
+  };
   return Object.freeze({ configuration: locked, request,
-    finalize: input => request('FINALIZE_EXECUTION_INTENT', input),
+    finalize,
     getIntent: execution_intent_id => request('GET_EXECUTION_INTENT', { execution_intent_id }),
     observeIntent,
     putIntent: (execution_intent_id, record) => request('PUT_EXECUTION_INTENT', { execution_intent_id, record }),

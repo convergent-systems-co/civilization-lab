@@ -79,7 +79,8 @@ async function main() {
     evidencePrivateKey, evidenceHeadPrivateKey, authorityId: config.authority_id,
     trustedHeadDirectory: resolve(config.trusted_head_directory), authorizeRequest, authorizeFinalization });
   const service = createCalibrationEvidenceAuthorityHttpsServer({ authority, certificate, privateKey: tlsPrivateKey,
-    host: config.listen_host, port: config.listen_port });
+    host: config.listen_host, port: config.listen_port,
+    diagnostic: record => process.stderr.write(`evidence-authority diagnostic ${JSON.stringify(record)}\n`) });
   const endpoint = await service.start();
   // This contains no credential or private-key material. Operators can bind the
   // exact HTTPS endpoint into the separately signed adapter package/release.

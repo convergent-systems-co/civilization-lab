@@ -8,6 +8,7 @@ import {
   calibrationTrustPolicyFor,
   createCalibrationDeploymentArtifacts,
   provisionCalibrationAuthorities,
+  verifyFailedPredecessorArchive,
   writeCalibrationEvidenceAuthorityConfiguration,
   writeCalibrationDeploymentArtifacts
 } from '../src/calibration-trust-provisioning.js';
@@ -43,6 +44,9 @@ try {
   const evidenceStorageDirectory = resolve(required('--evidence-storage-dir'));
   const trustPolicyPath = resolve(required('--trust-policy-path'));
   const predecessorDisposition = JSON.parse(await readFile(resolve(required('--predecessor-failed-campaign')), 'utf8'));
+  await verifyFailedPredecessorArchive({ disposition: predecessorDisposition,
+    directory: resolve(required('--predecessor-archive')),
+    publicKey: await readFile(resolve(required('--predecessor-archive-public-key')), 'utf8') });
   const predecessorFailedCampaign = {
     reference_type: 'PREDECESSOR_FAILED_CAMPAIGN', disposition: predecessorDisposition.disposition,
     campaign_id: predecessorDisposition.campaign_id, calibration_run_id: predecessorDisposition.calibration_run_id,

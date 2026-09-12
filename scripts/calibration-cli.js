@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { readFile } from "node:fs/promises";
-import { createPrivateKey, createPublicKey } from "node:crypto";
-import { resolve } from "node:path";
+import { readFile, readdir } from "node:fs/promises";
+import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
+import { join, resolve } from "node:path";
 import { assertCalibrationReleaseTrust, CalibrationArchive, CALIBRATION_TOOLING_VERSION, PhaseACalibrationRunner,
   assertSecureCalibrationArchiveDirectory, assertSecureCalibrationPrivateKeyPath,
   calibrationDeploymentTrustPolicy, calibrationKeyId, loadCalibrationExecutionModule } from "../src/calibration-runner.js";
@@ -60,13 +60,26 @@ const option = name => {
   if (value === undefined || value.startsWith("--")) throw new Error(`${name} requires a value`);
   return value;
 };
-const assertProvisionedTrustRoots = async (releasePublicKey, authorizationPublicKey) => {
-  const registry = calibrationDeploymentTrustPolicy();
+const assertProvisionedTrustRoots = async (releasePublicKey, authorizationPublicKey,
+  registry = calibrationDeploymentTrustPolicy()) => {
   if (registry.status !== "PROVISIONED" ||
     !registry.approved_release_key_ids?.includes(calibrationKeyId(releasePublicKey)) ||
     !registry.approved_authorization_key_ids?.includes(calibrationKeyId(authorizationPublicKey)))
     throw new Error("empirical release/authorization authority is absent from the distribution-pinned deployment trust policy");
   return registry;
+};
+const archiveTreeDigest = async directory => {
+  const paths = [];
+  const walk = async path => { for (const entry of await readdir(path, { withFileTypes: true })) {
+    const child = join(path, entry.name);
+    if (entry.isDirectory()) await walk(child);
+    else if (entry.isFile()) paths.push(child);
+    else throw new Error("archive tree contains a non-regular entry");
+  } };
+  await walk(resolve(directory)); paths.sort();
+  const lines = [];
+  for (const path of paths) lines.push(`${createHash("sha256").update(await readFile(path)).digest("hex")}  ${path}\n`);
+  return createHash("sha256").update(lines.join("")).digest("hex");
 };
 
 // Every verb reports a refusal as one operator-readable line on stderr with a
@@ -115,13 +128,26 @@ try {
       const releaseDescriptor = JSON.parse(await readFile(resolve(releasePath), "utf8"));
       const authorizationPublicKey = createPublicKey(await readFile(resolve(authorizationPublicPath), "utf8"));
       const releaseTrust = await readFile(resolve(releasePublicPath), "utf8");
-      const trustPolicy = await assertProvisionedTrustRoots(createPublicKey(releaseTrust), authorizationPublicKey);
+      const historicalDistribution = option("--historical-distribution") === "allow-read-only";
+      const historicalPolicyPath = option("--historical-trust-policy");
+      if (historicalDistribution !== Boolean(historicalPolicyPath))
+        throw new Error("historical read-only verification requires --historical-trust-policy, and current verification forbids it");
+      const trustPolicy = historicalDistribution
+        ? JSON.parse(await readFile(resolve(historicalPolicyPath), "utf8")) : calibrationDeploymentTrustPolicy();
+      if (historicalDistribution) {
+        const expectedPolicyDigest = authorization.adapter_executable?.files?.["config/calibration-trust-policy.json"];
+        const policyBytes = await readFile(resolve(historicalPolicyPath));
+        if (createHash("sha256").update(policyBytes).digest("hex") !== expectedPolicyDigest ||
+          sha256(trustPolicy) !== releaseDescriptor.deployment_trust_policy_hash)
+          throw new Error("historical trust-policy snapshot is not bound by the signed adapter and release");
+      }
+      await assertProvisionedTrustRoots(createPublicKey(releaseTrust), authorizationPublicKey, trustPolicy);
       const archiveDirectory = assertSecureCalibrationArchiveDirectory(directory);
       const evidencePublicKey = await readFile(resolve(evidencePublicPath), "utf8"), headPublicKey = await readFile(resolve(evidenceHeadPublicPath), "utf8");
       await loadCalibrationExecutionModule(adapterPath, authorization, { archiveDirectory,
         authorizationTrust: authorizationPublicKey.export({ type: "spki", format: "pem" }), releaseDescriptor, releaseTrust,
-        trustPolicy, revocationRegistry });
-      const releaseBinding = assertCalibrationReleaseTrust(releaseDescriptor, releaseTrust, trustPolicy);
+        trustPolicy, revocationRegistry, historicalDistribution });
+      const releaseBinding = assertCalibrationReleaseTrust(releaseDescriptor, releaseTrust, trustPolicy, { historicalDistribution });
       if (keyId !== authorization.archive_key_id || attestorKeyId !== authorization.attestor_key_id ||
         calibrationKeyId(createPublicKey(evidencePublicKey)) !== authorization.evidence_key_id ||
         calibrationKeyId(createPublicKey(headPublicKey)) !== authorization.evidence_head_key_id)
@@ -129,10 +155,12 @@ try {
       const codingPublicPath = option("--coding-public-key"), codingKeyId = option("--coding-key-id"), codingAuthorityId = option("--coding-authority-id");
       if ([codingPublicPath, codingKeyId, codingAuthorityId].some(Boolean) && [codingPublicPath, codingKeyId, codingAuthorityId].some(value => !value))
         throw new Error("coding trust requires --coding-public-key, --coding-key-id, and --coding-authority-id together");
-      trust = { ...trust, trustScope: "EMPIRICAL_ARCHIVE", releaseBinding,
+      trust = { ...trust, trustScope: "EMPIRICAL_ARCHIVE", releaseBinding, historicalDistribution,
+        toolingDistributionDigest: releaseBinding.tooling_distribution_digest,
         executionBinding: { authorization_hash: sha256(authorization), authorization_key_id: authorization.key_id,
           campaign_id: authorization.campaign_id, calibration_run_id: authorization.calibration_run_id,
-          attestor_key_id: authorization.attestor_key_id },
+          attestor_key_id: authorization.attestor_key_id,
+          predecessor_failed_campaign: structuredClone(authorization.predecessor_failed_campaign ?? null) },
         evidenceAuthority: { evidencePublicKey, headPublicKey, adapterHash: authorization.adapter_hash,
           executableHash: sha256(authorization.adapter_executable), policyManifestHash: authorization.policy_manifest_hash,
           policyId: authorization.policy_manifest.policy_id, modelUseDeclared: authorization.policy_manifest.model_use_declared },
@@ -143,11 +171,38 @@ try {
     await archive.verify({ trustedKeys: { [keyId]: publicKey, [attestorKeyId]: attestorPublicKey } });
     if (verifyMode === "synthetic") await assertSoftwareEvidenceProvenance(archive);
     else if (archive.state.execution_mode !== "EMPIRICAL_CALIBRATION") throw new Error("empirical verifier refuses a synthetic archive");
-    if (archive.state.status !== "COMPLETE" || archive.state.result_ref !== "CALIBRATION_RESULT.json")
-      throw new Error("release verification requires a complete calibration result archive");
-    console.log(JSON.stringify({ status: "PASS", archive: resolve(directory), protocol_version: protocol.protocol_version,
+    const partial = archive.state.status !== "COMPLETE" || archive.state.result_ref !== "CALIBRATION_RESULT.json";
+    let failedDisposition = null;
+    if (partial && option("--failed-campaign-disposition")) {
+      failedDisposition = JSON.parse(await readFile(resolve(option("--failed-campaign-disposition")), "utf8"));
+      const attemptIds = archive.state.execution_attempts.map(item => item.execution_attempt_id).sort();
+      if (!["FAILED_PRE_CALIBRATION_EXECUTION", "FAILED_BEFORE_CALIBRATION_RESULT"].includes(failedDisposition.disposition) ||
+        failedDisposition.schema_version !== "phase-a-failed-replacement-campaign-disposition-1.0.0" ||
+        failedDisposition.classification !== "P0_EVIDENCE_AUTHORITY_FINALIZATION_FAILURE" ||
+        failedDisposition.campaign_id !== archive.state.campaign_id ||
+        failedDisposition.calibration_run_id !== archive.state.calibration_run_id ||
+        failedDisposition.archive_head?.generation !== archive.head.generation ||
+        failedDisposition.archive_head?.digest !== archive.head.digest ||
+        failedDisposition.parameter_vectors_successfully_evaluated !== 0 ||
+        failedDisposition.calibration_seeds_completed !== 0 ||
+        failedDisposition.archive_tree_digest !== await archiveTreeDigest(directory) ||
+        failedDisposition.is_calibration_result !== false || failedDisposition.selected_configuration !== null ||
+        failedDisposition.empirical_retry_authorized !== false ||
+        !Array.isArray(failedDisposition.execution_attempt_ids) || failedDisposition.execution_attempt_ids.length === 0 ||
+        archive.state.completed_keys.length !== 0 || archive.state.executions.length !== 0 ||
+        JSON.stringify([...failedDisposition.execution_attempt_ids].sort()) !== JSON.stringify(attemptIds))
+        throw new Error("failed-campaign disposition does not bind the verified partial archive");
+    }
+    console.log(JSON.stringify({ status: partial ? failedDisposition ? "VALID_FAILED_PARTIAL_CAMPAIGN" : "VALID_PARTIAL_CAMPAIGN" : "PASS",
+      archive: resolve(directory), protocol_version: protocol.protocol_version,
       execution_mode: archive.state.execution_mode,
-      evidence_class: archive.state.execution_mode === "SYNTHETIC_CONFORMANCE" ? "SYNTHETIC_SOFTWARE_CONFORMANCE" : "EMPIRICAL_CALIBRATION_EVIDENCE" }));
+      evidence_class: archive.state.execution_mode === "SYNTHETIC_CONFORMANCE" ? "SYNTHETIC_SOFTWARE_CONFORMANCE"
+        : partial ? "EMPIRICAL_CALIBRATION_ATTEMPT_EVIDENCE" : "EMPIRICAL_CALIBRATION_EVIDENCE",
+      archive_status: archive.state.status, completed_keys: archive.state.completed_keys.length,
+      execution_attempts: archive.state.execution_attempts.length,
+      selected_configurations: archive.state.result_ref === null ? 0 : 1,
+      ...(failedDisposition ? { failed_disposition: failedDisposition.disposition,
+        failed_disposition_hash: sha256(failedDisposition) } : {}) }));
 } else if (command === "run") {
   const authorizationPath = option("--authorization"), authorizationPublicKeyPath = option("--authorization-public-key");
   const adapterPath = option("--adapter-module"), directory = option("--archive");

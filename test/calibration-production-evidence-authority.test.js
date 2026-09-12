@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, verify } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { request as httpsRequest } from 'node:https';
-import { chmod, mkdir, mkdtemp, readFile, stat, unlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { canonicalize, sha256 } from '../src/core.js';
@@ -13,6 +13,7 @@ import {
   createCalibrationEvidenceAuthority,
   createCalibrationEvidenceAuthorityHttpsServer,
   createEvidenceHeadAnchor,
+  EVIDENCE_AUTHORITY_MAX_REQUEST_BYTES,
   createRevocationAnchor,
   reconcileRevocationAnchor,
   verifyCalibrationEvidenceAuthority,
@@ -95,6 +96,19 @@ test('authority refuses a pre-existing storage root with group or world access',
   await assert.rejects(authority.initialize(), /owner-only/);
 });
 
+test('read-only verifier accepts an empty legacy store without creating a claims directory', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'civilization-lab-legacy-empty-authority-'));
+  t.after(async () => { await import('node:fs/promises').then(({ rm }) => rm(directory, { recursive: true, force: true })); });
+  for (const name of ['authority-heads', 'finalizations', 'evidence-objects']) await mkdir(join(directory, name), { mode: 0o700 });
+  const evidence = generateKeyPairSync('ed25519'), head = generateKeyPairSync('ed25519');
+  const before = (await readdir(directory)).sort();
+  const result = await verifyCalibrationEvidenceAuthority({ directory,
+    evidencePublicKey: pem(evidence.publicKey, 'spki'), evidenceHeadPublicKey: pem(head.publicKey, 'spki'),
+    authorityId: 'phase-a-local-authority-test' });
+  assert.equal(result.finalized_count, 0); assert.equal(result.head, null);
+  assert.deepEqual((await readdir(directory)).sort(), before);
+});
+
 test('FINALIZE is idempotent, content-addressed, signed by distinct keys, and restart durable', async t => {
   const f = await fixture(t), input = finalizationInput();
   const first = await f.authority.finalize(input);
@@ -135,7 +149,9 @@ test('signed authority observations distinguish absent, stored, pending, and fin
   check(await f.authority.observeIntent(id), 'INTENT_STORED');
   crashAtHead = true;
   await assert.rejects(() => f.authority.finalize(input), /head response lost/);
-  check(await f.authority.observeIntent(id), 'FINALIZATION_PENDING');
+  // Observation is also the recovery trigger: authoritative pending state is
+  // completed idempotently without requiring a process restart.
+  check(await f.authority.observeIntent(id), 'FINALIZED');
   const restarted = createCalibrationEvidenceAuthority({ directory: f.directory,
     credential: 'synthetic-authority-credential', evidencePrivateKey: pem(f.evidence.privateKey, 'pkcs8'),
     evidenceHeadPrivateKey: pem(f.head.privateKey, 'pkcs8'), authorityId: 'phase-a-local-authority-test',
@@ -171,6 +187,7 @@ test('faults at every evidence commit boundary recover from authoritative state 
     'before_evidence_object_commit',
     'after_evidence_object_commit_before_attestation',
     'during_final_attempt_attestation',
+    'after_finalization_staged_before_head_update',
     'after_evidence_head_advanced_before_finalization',
     'after_finalization_before_head_acknowledgement'
   ].entries()) {
@@ -191,6 +208,103 @@ test('faults at every evidence commit boundary recover from authoritative state 
       evidencePublicKey: pem(f.evidence.publicKey, 'spki'), evidenceHeadPublicKey: pem(f.head.publicKey, 'spki'),
       authorityId: 'phase-a-local-authority-test' });
     assert.equal(verified.head.generation, 0, `${boundary} must produce exactly one authoritative disposition`);
+  }
+});
+
+test('pre-finalization claim rejects divergent retry and accounts for the originally committed object', async t => {
+  let fail = true;
+  const f = await fixture(t, authorizeFinalization, null, async point => {
+    if (fail && point === 'after_evidence_object_commit_before_attestation') {
+      fail = false; throw new Error('crash:after-object');
+    }
+  });
+  const input = finalizationInput('intent-claimed-object-0001');
+  await assert.rejects(f.authority.finalize(input), /crash:after-object/);
+  await assert.rejects(f.authority.finalize({ ...structuredClone(input),
+    binding: { ...input.binding, policy_manifest_hash: 'e'.repeat(64) } }), /mutation|conflict/);
+  const divergent = structuredClone(input);
+  divergent.bundle = makeWorld({ runId: input.bundle.run_id, seed: 'different-valid-world-seed' }).evidence.bundle();
+  await assert.rejects(f.authority.finalize(divergent), /mutation|conflict/);
+  const result = await f.authority.finalize(structuredClone(input));
+  assert.equal(result.bundle.run_id, input.bundle.run_id);
+  assert.equal((await readdir(join(f.directory, 'finalization-claims'))).length, 1);
+  assert.equal((await readdir(join(f.directory, 'evidence-objects'))).length, 1);
+  const verified = await verifyCalibrationEvidenceAuthority({ directory: f.directory,
+    evidencePublicKey: pem(f.evidence.publicKey, 'spki'), evidenceHeadPublicKey: pem(f.head.publicKey, 'spki'),
+    authorityId: 'phase-a-local-authority-test' });
+  assert.equal(verified.finalized_count, 1);
+});
+
+test('authority verification rejects a missing or substituted finalized claim', async t => {
+  for (const [index, mutation] of ['missing', 'substituted'].entries()) {
+    const f = await fixture(t), input = finalizationInput(`intent-claim-tamper-${index}`);
+    await f.authority.finalize(input);
+    const path = join(f.directory, 'finalization-claims', input.execution_intent_id + '.json');
+    if (mutation === 'missing') await unlink(path);
+    else {
+      const claim = JSON.parse(await readFile(path, 'utf8'));
+      claim.adapter_hash = 'f'.repeat(64); await writeFile(path, canonicalize(claim));
+    }
+    await assert.rejects(verifyCalibrationEvidenceAuthority({ directory: f.directory,
+      evidencePublicKey: pem(f.evidence.publicKey, 'spki'), evidenceHeadPublicKey: pem(f.head.publicKey, 'spki'),
+      authorityId: 'phase-a-local-authority-test' }), mutation === 'missing' ? /ENOENT|no such file/ : /exact immutable finalization claim/);
+  }
+});
+
+test('real HTTPS SIGKILL at every commit boundary restarts and reconciles one finalization', async t => {
+  for (const [index, crashBoundary] of [
+    'before_evidence_object_commit', 'after_evidence_object_commit_before_attestation',
+    'during_final_attempt_attestation', 'after_finalization_staged_before_head_update',
+    'after_evidence_head_advanced_before_finalization', 'after_finalization_before_head_acknowledgement'
+  ].entries()) {
+  const f = await fixture(t), input = finalizationInput(`intent-real-process-crash-${index}`);
+  const tls = join(f.directory, `tls-process-crash-${index}`); await mkdir(tls, { mode: 0o700 });
+  const tlsKey = join(tls, 'server-key.pem'), tlsCert = join(tls, 'server-cert.pem');
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', tlsKey, '-out', tlsCert,
+    '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1', '-days', '1'], { stdio: 'ignore' });
+  const evidenceKey = join(f.directory, 'crash-evidence-private.pem');
+  const headKey = join(f.directory, 'crash-head-private.pem');
+  await writeFile(evidenceKey, pem(f.evidence.privateKey, 'pkcs8'), { mode: 0o600 });
+  await writeFile(headKey, pem(f.head.privateKey, 'pkcs8'), { mode: 0o600 });
+  const childConfig = join(f.directory, 'crash-child.json');
+  await writeFile(childConfig, canonicalize({ directory: f.directory, credential: 'synthetic-authority-credential',
+    evidence_private_key: evidenceKey, evidence_head_private_key: headKey, authority_id: 'phase-a-local-authority-test',
+    trusted_head_directory: f.trustedHeadDirectory, tls_certificate: tlsCert, tls_private_key: tlsKey,
+    crash_boundary: crashBoundary }), { mode: 0o600 });
+  const child = spawn(process.execPath, ['test/fixtures/calibration-evidence-authority-crash-child.mjs', childConfig],
+    { cwd: new URL('..', import.meta.url).pathname, stdio: ['ignore', 'pipe', 'pipe'] });
+  const childExit = new Promise(resolveExit => child.once('exit', (code, signal) => resolveExit({ code, signal })));
+  const endpoint = await new Promise((resolveEndpoint, reject) => {
+    child.once('error', reject); child.stdout.once('data', chunk => resolveEndpoint(chunk.toString().trim()));
+  });
+  const certificate = await readFile(tlsCert), configuration = {
+    version: 'phase-a-evidence-authority-client-1.1.0', request_version: 'phase-a-evidence-authority-request-1.1.0',
+    endpoint, request_timeout_ms: 5000, worker_timeout_ms: 10000, transport: 'HTTPS_PRODUCTION',
+    tls_ca_resource: 'config/calibration-evidence-authority-ca.pem', tls_ca_sha256: sha256(certificate.toString('utf8')),
+    observation_public_key: pem(f.head.publicKey, 'spki') };
+  const crashedClient = createEvidenceAuthorityClient({ configuration, credential: 'synthetic-authority-credential',
+    certificateAuthority: certificate });
+  await assert.rejects(crashedClient.finalize(input), error => error.code === 'CALIBRATION_INFRASTRUCTURE_AUTHORITY');
+  assert.deepEqual(await childExit, { code: null, signal: 'SIGKILL' });
+  const restarted = createCalibrationEvidenceAuthority({ directory: f.directory,
+    credential: 'synthetic-authority-credential', evidencePrivateKey: pem(f.evidence.privateKey, 'pkcs8'),
+    evidenceHeadPrivateKey: pem(f.head.privateKey, 'pkcs8'), authorityId: 'phase-a-local-authority-test',
+    authorizeRequest: async () => true, authorizeFinalization, trustedHeadDirectory: f.trustedHeadDirectory });
+  const restartedServer = createCalibrationEvidenceAuthorityHttpsServer({ authority: restarted,
+    certificate, privateKey: await readFile(tlsKey), host: '127.0.0.1', port: 0 });
+  const restartedEndpoint = await restartedServer.start(); t.after(() => restartedServer.stop());
+  const client = createEvidenceAuthorityClient({ configuration: { ...configuration, endpoint: restartedEndpoint },
+    credential: 'synthetic-authority-credential', certificateAuthority: certificate });
+  let observation = (await client.observeIntent(input.execution_intent_id)).observation.body;
+  const recovered = observation.state === 'FINALIZED' ? observation.result : await client.finalize(structuredClone(input));
+  observation = (await client.observeIntent(input.execution_intent_id)).observation.body;
+  assert.equal(observation.state, 'FINALIZED', crashBoundary);
+  assert.deepEqual(recovered, observation.result);
+  assert.deepEqual(await client.finalize(structuredClone(input)), observation.result);
+  const verified = await verifyCalibrationEvidenceAuthority({ directory: f.directory,
+    evidencePublicKey: pem(f.evidence.publicKey, 'spki'), evidenceHeadPublicKey: pem(f.head.publicKey, 'spki'),
+    authorityId: 'phase-a-local-authority-test' });
+  assert.equal(verified.finalized_count, 1, crashBoundary); assert.equal(verified.head.generation, 0, crashBoundary);
   }
 });
 
@@ -367,6 +481,29 @@ test('production endpoint is HTTPS-only with bearer authentication and no plaint
   await assert.rejects(fetch(endpoint), /fetch failed/);
 });
 
+test('production request ceiling admits a measured full Phase A bundle and diagnoses ingestion rejection', async t => {
+  assert(EVIDENCE_AUTHORITY_MAX_REQUEST_BYTES > 157_895_011,
+    'production request ceiling regressed below the measured frozen 20-turn request');
+  const diagnostics = [], f = await fixture(t);
+  const tls = join(f.directory, 'tls-size-boundary');
+  await mkdir(tls, { mode: 0o700 });
+  const keyPath = join(tls, 'server-key.pem'), certPath = join(tls, 'server-cert.pem');
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', keyPath, '-out', certPath,
+    '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1', '-days', '1'], { stdio: 'ignore' });
+  const certificate = await readFile(certPath);
+  const server = createCalibrationEvidenceAuthorityHttpsServer({ authority: f.authority,
+    certificate, privateKey: await readFile(keyPath), host: '127.0.0.1', port: 0, maxRequestBytes: 128,
+    diagnostic: record => diagnostics.push(record) });
+  await server.start(); t.after(() => server.stop());
+  const message = { version: 'phase-a-evidence-authority-request-1.1.0', operation: 'GET_EXECUTION_INTENT',
+    execution_intent_id: 'intent-size-boundary-0001', input: { execution_intent_id: 'intent-size-boundary-0001' },
+    padding: 'x'.repeat(512) };
+  await post({ endpoint: server.endpoint, ca: certificate, token: 'synthetic-authority-credential', body: message }).catch(() => null);
+  assert.deepEqual(diagnostics, [{ code: 'EVIDENCE_AUTHORITY_REQUEST_TOO_LARGE', boundary: 'REQUEST_BODY_INGESTION' }]);
+  assert.equal((await readdir(join(f.directory, 'finalizations'))).length, 0);
+  assert.equal((await readdir(join(f.directory, 'authority-heads'))).length, 0);
+});
+
 test('HTTPS reports internal authority/storage failure as retryable infrastructure, not protocol rejection', async t => {
   let authorizationDependencyDown = true;
   const f = await fixture(t, authorizeFinalization, async () => {
@@ -394,6 +531,72 @@ test('HTTPS reports internal authority/storage failure as retryable infrastructu
   authorizationDependencyDown = false;
   await assert.rejects(client.finalize(finalizationInput('intent-https-internal-failure-0001')), error =>
     error.code === 'CALIBRATION_INFRASTRUCTURE_AUTHORITY' && error.calibrationClassification === 'INFRASTRUCTURE_FAILURE');
+});
+
+test('HTTPS acknowledgement loss reconciles to one committed finalization and one head', async t => {
+  const f = await fixture(t); let drop = true;
+  const tls = join(f.directory, 'tls-ack-loss');
+  await mkdir(tls, { mode: 0o700 });
+  const keyPath = join(tls, 'server-key.pem'), certPath = join(tls, 'server-cert.pem');
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', keyPath, '-out', certPath,
+    '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1', '-days', '1'], { stdio: 'ignore' });
+  const certificate = await readFile(certPath);
+  const server = createCalibrationEvidenceAuthorityHttpsServer({ authority: f.authority,
+    certificate, privateKey: await readFile(keyPath), host: '127.0.0.1', port: 0,
+    transportFault: async point => { if (drop && point === 'after_authority_commit_before_acknowledgement') {
+      drop = false; throw new Error('synthetic acknowledgement loss');
+    } } });
+  await server.start(); t.after(() => server.stop());
+  const client = createEvidenceAuthorityClient({ configuration: {
+    version: 'phase-a-evidence-authority-client-1.1.0', request_version: 'phase-a-evidence-authority-request-1.1.0',
+    endpoint: server.endpoint, request_timeout_ms: 2000, worker_timeout_ms: 5000, transport: 'HTTPS_PRODUCTION',
+    tls_ca_resource: 'config/calibration-evidence-authority-ca.pem', tls_ca_sha256: sha256(certificate.toString('utf8')),
+    observation_public_key: pem(f.head.publicKey, 'spki')
+  }, credential: 'synthetic-authority-credential', certificateAuthority: certificate });
+  const input = finalizationInput('intent-https-ack-loss-0001');
+  await assert.rejects(client.finalize(input), error => error.code === 'CALIBRATION_INFRASTRUCTURE_AUTHORITY');
+  const observation = (await client.observeIntent(input.execution_intent_id)).observation.body;
+  assert.equal(observation.state, 'FINALIZED');
+  assert.equal(observation.request_hash, input.request_hash);
+  assert.deepEqual(await client.finalize(structuredClone(input)), observation.result);
+  const verified = await verifyCalibrationEvidenceAuthority({ directory: f.directory,
+    evidencePublicKey: pem(f.evidence.publicKey, 'spki'), evidenceHeadPublicKey: pem(f.head.publicKey, 'spki'),
+    authorityId: 'phase-a-local-authority-test' });
+  assert.equal(verified.finalized_count, 1);
+  assert.equal(verified.head.generation, 0);
+});
+
+test('client disconnect after acknowledgement begins reconciles to the committed authoritative result', async t => {
+  const f = await fixture(t), tls = join(f.directory, 'tls-client-disconnect');
+  await mkdir(tls, { mode: 0o700 });
+  const keyPath = join(tls, 'server-key.pem'), certPath = join(tls, 'server-cert.pem');
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', keyPath, '-out', certPath,
+    '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1', '-days', '1'], { stdio: 'ignore' });
+  const certificate = await readFile(certPath), server = createCalibrationEvidenceAuthorityHttpsServer({ authority: f.authority,
+    certificate, privateKey: await readFile(keyPath), host: '127.0.0.1', port: 0 });
+  const endpoint = await server.start(); t.after(() => server.stop());
+  const input = finalizationInput('intent-client-disconnect-0001');
+  await new Promise((resolveDisconnect, reject) => {
+    const request = httpsRequest(endpoint, { method: 'POST', ca: certificate, servername: 'localhost',
+      headers: { authorization: 'Bearer synthetic-authority-credential', 'content-type': 'application/json' } }, response => {
+      response.once('data', () => { response.destroy(); resolveDisconnect(); });
+    });
+    request.once('error', error => { if (error.code === 'ECONNRESET') resolveDisconnect(); else reject(error); });
+    request.end(canonicalize({ version: 'phase-a-evidence-authority-request-1.1.0',
+      operation: 'FINALIZE_EXECUTION_INTENT', execution_intent_id: input.execution_intent_id, input }));
+  });
+  const client = createEvidenceAuthorityClient({ configuration: { version: 'phase-a-evidence-authority-client-1.1.0',
+    request_version: 'phase-a-evidence-authority-request-1.1.0', endpoint, request_timeout_ms: 2000,
+    worker_timeout_ms: 5000, transport: 'HTTPS_PRODUCTION', tls_ca_resource: 'config/ca.pem',
+    tls_ca_sha256: sha256(certificate.toString('utf8')), observation_public_key: pem(f.head.publicKey, 'spki') },
+    credential: 'synthetic-authority-credential', certificateAuthority: certificate });
+  const observation = (await client.observeIntent(input.execution_intent_id)).observation.body;
+  assert.equal(observation.state, 'FINALIZED');
+  assert.deepEqual(await client.finalize(structuredClone(input)), observation.result);
+  const verified = await verifyCalibrationEvidenceAuthority({ directory: f.directory,
+    evidencePublicKey: pem(f.evidence.publicKey, 'spki'), evidenceHeadPublicKey: pem(f.head.publicKey, 'spki'),
+    authorityId: 'phase-a-local-authority-test' });
+  assert.equal(verified.finalized_count, 1); assert.equal(verified.head.generation, 0);
 });
 
 test('production client accepts only its signed pinned CA and rejects substitution', async t => {

@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { generateKeyPairSync, sign } from 'node:crypto';
+import { canonicalize, sha256 } from '../src/core.js';
 import { createEvidenceAuthorityClient } from '../src/calibration-evidence-authority-client.js';
 
 const configuration = { version: 'phase-a-evidence-authority-client-1.1.0', request_version: 'phase-a-evidence-authority-request-1.1.0',
@@ -72,4 +74,35 @@ test('malformed HTTP and authority payloads fail with typed authority protocol s
       error.calibrationClassification === 'PROTOCOL_VIOLATION' &&
       !error.message.includes('malformed-secret'));
   }
+});
+
+test('finalize validates signed receipts and every request/evidence/apparatus binding', async () => {
+  const keys = generateKeyPairSync('ed25519');
+  const config = { ...configuration,
+    observation_public_key: keys.publicKey.export({ format: 'pem', type: 'spki' }) };
+  const input = { execution_intent_id: 'intent-signed-receipt', bundle: { run_id: 'run-signed-receipt' },
+    request: { idempotencyKey: 'intent-signed-receipt', seed: 'seed-1' },
+    binding: { calibration_parameter_set_hash: 'a'.repeat(64), policy_manifest_hash: 'b'.repeat(64) },
+    adapterHash: 'c'.repeat(64), adapterPackageDigest: 'd'.repeat(64) };
+  const envelope = body => ({ body, signature: sign(null, Buffer.from(canonicalize(body)), keys.privateKey).toString('base64') });
+  const head = envelope({ version: 'phase-a-evidence-head-1.0.0', mode: 'EMPIRICAL_CALIBRATION',
+    run_id: input.bundle.run_id, evidence_key_id: 'e'.repeat(64), adapter_hash: input.adapterHash,
+    head: { generation: 0, digest: 'f'.repeat(64) } });
+  const adapter = envelope({ version: 'phase-a-adapter-execution-receipt-1.0.0', mode: 'EMPIRICAL_CALIBRATION',
+    run_id: input.bundle.run_id, seed: input.request.seed,
+    parameter_set_hash: input.binding.calibration_parameter_set_hash, execution_request_hash: sha256(input.request),
+    policy_manifest_hash: input.binding.policy_manifest_hash, adapter_hash: input.adapterHash,
+    adapter_executable_hash: input.adapterPackageDigest, adapter_package_digest: input.adapterPackageDigest,
+    evidence_hash: sha256(input.bundle) });
+  const result = { execution_intent_id: input.execution_intent_id, bundle: input.bundle,
+    evidence_head_receipt: head, adapter_execution_receipt: adapter };
+  const client = body => createEvidenceAuthorityClient({ configuration: config, credential: 'synthetic-token',
+    fetchImplementation: async () => ({ ok: true, status: 200, async json() { return structuredClone(body); } }) });
+  assert.deepEqual(await client(result).finalize(input), { bundle: input.bundle,
+    evidence_head_receipt: head, adapter_execution_receipt: adapter });
+  const forged = structuredClone(result); forged.evidence_head_receipt.signature = Buffer.alloc(64).toString('base64');
+  await assert.rejects(client(forged).finalize(input), error => error.code === 'CALIBRATION_AUTHORITY_PROTOCOL');
+  const substituted = structuredClone(result); substituted.adapter_execution_receipt.body.seed = 'different-seed';
+  substituted.adapter_execution_receipt = envelope(substituted.adapter_execution_receipt.body);
+  await assert.rejects(client(substituted).finalize(input), error => error.code === 'CALIBRATION_AUTHORITY_PROTOCOL');
 });
