@@ -57,7 +57,7 @@ test("archive preserves attempts immutably and resumes without double-counting",
   const archive = new CalibrationArchive(directory);
   await archive.initialize({ protocolVersion: protocol.protocol_version, implementationCommit: implementation });
   const parameterSet = startingCalibrationParameterSet();
-  const attempt = { schema_version: "phase-a-calibration-manifest-2.0.0", tooling_version: "phase-a-calibration-tooling-1.0.0", calibration_run_id: archive.state.calibration_run_id, attempt_id: "attempt-1",
+  const attempt = { schema_version: "phase-a-calibration-manifest-2.0.0", tooling_version: "phase-a-calibration-tooling-1.1.0", calibration_run_id: archive.state.calibration_run_id, attempt_id: "attempt-1",
     tooling_distribution_digest: calibrationToolingDistributionDigest(), baseline_tag_commit: implementation, release_descriptor_hash: null,
     implementation_commit: implementation, implementation_tag: "v0.1.0-pilot0", protocol_version: protocol.protocol_version,
     specification_versions: baseline.specification_sha256,
@@ -80,7 +80,7 @@ test("attestation binds baseline, protocol, domains, evidence, metrics, seeds, a
   const parameterSet = startingCalibrationParameterSet();
   const attempt = {
     tooling_distribution_digest: calibrationToolingDistributionDigest(), baseline_tag_commit: implementation, release_descriptor_hash: null,
-    schema_version: "2.0.0", tooling_version: "phase-a-calibration-tooling-1.0.0", calibration_run_id: "cal-run", attempt_id: "attempt-1",
+    schema_version: "2.0.0", tooling_version: "phase-a-calibration-tooling-1.1.0", calibration_run_id: "cal-run", attempt_id: "attempt-1",
     implementation_commit: implementation, implementation_tag: "v0.1.0-pilot0",
     protocol_version: protocol.protocol_version, parameter_registry_version: "pilot-0.3-world-endpoint",
     specification_versions: baseline.specification_sha256, parameter_set: parameterSet, parameter_set_hash: sha256(parameterSet),
@@ -242,18 +242,21 @@ test("archive verification detects fabricated metrics and validates trusted cand
   await assert.rejects(() => archive.verify({ trustedKeys: { [attestor.keyId]: publicKey } }), /artifact content hash mismatch/);
 });
 
-test("implementation failures are retained distinctly from parameter failures", async () => {
+test("implementation failures are retained as execution attempts and never complete calibration keys", async () => {
   const directory = await mkdtemp(join(tmpdir(), "civilization-failure-class-"));
   const runner = new PhaseACalibrationRunner({ directory, mode: "SYNTHETIC_CONFORMANCE", implementationCommit: implementation,
     executor: async () => { throw new Error("reducer exploded"); } });
   await assert.rejects(() => runner.run({ maximumCandidates: 1 }), /reducer exploded/);
   const archive = await CalibrationArchive.open(directory);
-  assert.equal(archive.state.attempts.length, 1);
-  assert.equal(archive.state.attempts[0].status, CALIBRATION_FAILURES.IMPLEMENTATION_DEFECT);
+  assert.equal(archive.state.attempts.length, 0);
+  assert.equal(archive.state.completed_keys.length, 0);
+  assert.equal(archive.state.execution_attempts.length, 1);
+  assert.equal(archive.state.execution_attempts[0].transitions.at(-1).state, "FAILED_TERMINAL");
+  assert.equal(archive.state.status, "FAILED");
   let retries = 0;
   const resumed = new PhaseACalibrationRunner({ directory, mode: "SYNTHETIC_CONFORMANCE", implementationCommit: implementation,
     executor: async () => { retries++; return syntheticCanonicalEvidence(); } });
-  await assert.rejects(() => resumed.run({ maximumCandidates: 1 }), /retained IMPLEMENTATION_DEFECT/);
+  await assert.rejects(() => resumed.run({ maximumCandidates: 1 }), /terminally failed/);
   assert.equal(retries, 0, "terminal failed seed must never be re-executed under the same attempt identity");
 });
 
@@ -264,7 +267,9 @@ test("treatment disclosure is retained as a signed blinding incident", async () 
   await assert.rejects(() => runner.run({ maximumCandidates: 1 }), /calibration blinding/);
   const archive = await CalibrationArchive.open(directory);
   assert.equal(archive.state.status, "FAILED");
-  assert.equal(archive.state.attempts[0].status, CALIBRATION_FAILURES.BLINDING_BREACH);
+  assert.equal(archive.state.attempts.length, 0);
+  assert.equal(archive.state.completed_keys.length, 0);
+  assert.equal(archive.state.execution_attempts[0].transitions.at(-1).state, "FAILED_TERMINAL");
   assert.equal(archive.state.incidents.length, 1);
   assert.equal(archive.state.incidents[0].disposition, "SELECTION_INVALID_REPEAT_FROM_LAST_UNEXPOSED_STATE");
 });

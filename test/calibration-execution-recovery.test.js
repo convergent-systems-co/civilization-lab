@@ -41,7 +41,7 @@ test("a durable pending seed intent resumes through adapter recovery without red
   assert.equal(dispatched, protocol.seed_panel.seeds.length - 1);
   const reopened = await CalibrationArchive.open(directory, trust);
   const intent = reopened.state.execution_intents.find(item => item.key === `${parameterHash}:${seed}`);
-  assert.equal(intent.status, "EVIDENCE_PERSISTED");
+  assert.equal(intent.status, "SUCCEEDED");
   assert.equal(reopened.state.executions.filter(item => item.key === intent.key).length, 1);
 });
 
@@ -59,7 +59,10 @@ test("adapter-returned bytes are quarantined before post-return evidence validat
   const item = reopened.state.quarantined_results[0];
   const raw = JSON.parse(await readFile(join(directory, item.path), "utf8"));
   assert.equal(raw.result.bundle.run_id, "returned-invalid-evidence");
-  const manifest = await reopened.manifest(item.attempt_id);
-  assert.equal(manifest.canonical_evidence_ref, item.path);
-  assert.notEqual(manifest.canonical_evidence_ref.startsWith("unavailable://"), true);
+  assert.equal(reopened.state.completed_keys.length, 0);
+  assert.equal(reopened.state.attempts.length, 0);
+  const failed = reopened.state.execution_attempts.find(attempt => attempt.execution_attempt_id === item.attempt_id);
+  assert.equal(failed.transitions.at(-1).state, "FAILED_TERMINAL");
+  const record = JSON.parse(await readFile(join(directory, failed.failure_record_path), "utf8"));
+  assert.equal(record.partial_canonical_evidence.quarantined_adapter_result_ref, item.path);
 });

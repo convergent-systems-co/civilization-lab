@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/calibration-evidence-authority-observation.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "authority_id", "execution_intent_id", "state", "request_hash", "result", "finalization_hash", "authority_head"],
+  "properties": {
+    "version": {"const": "phase-a-evidence-authority-observation-1.0.0"},
+    "authority_id": {"type": "string", "minLength": 3},
+    "execution_intent_id": {"type": "string", "minLength": 3},
+    "state": {"enum": ["ABSENT", "INTENT_STORED", "FINALIZATION_PENDING", "FINALIZED"]},
+    "request_hash": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "result": {"type": ["object", "null"]},
+    "finalization_hash": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "authority_head": {"type": ["object", "null"]}
+  }
+}

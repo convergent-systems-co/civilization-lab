@@ -1,10 +1,24 @@
-import { createHash } from 'node:crypto';
+import { createHash, createPublicKey, verify } from 'node:crypto';
 import { request as httpsRequest } from 'node:https';
 import { assert, canonicalize, clone, sha256 } from './core.js';
 import { CalibrationExecutionError, authorityAuthorization, authorityProtocol,
   infrastructureAuthority, infrastructureDeadline } from './calibration-errors.js';
+import { assertValidSchema } from './schema.js';
 
 const POSITIVE_TIMEOUT = value => Number.isSafeInteger(value) && value > 0 && value <= 300_000;
+const keyIdentifier = key => createHash('sha256').update(key.export({ type: 'spki', format: 'der' })).digest('hex');
+
+function validateObservationState(body) {
+  const absent = body.state === 'ABSENT';
+  const stored = body.state === 'INTENT_STORED';
+  const pending = body.state === 'FINALIZATION_PENDING';
+  const finalized = body.state === 'FINALIZED';
+  assert(absent ? body.request_hash === null && body.result === null && body.finalization_hash === null
+    : stored ? body.request_hash !== null && body.result === null && body.finalization_hash === null
+      : pending ? body.request_hash !== null && body.result === null && body.finalization_hash !== null
+        : finalized && body.request_hash !== null && body.result !== null && body.finalization_hash !== null,
+  'authority observation state fields conflict');
+}
 
 export function validateEvidenceAuthorityConfiguration(configuration) {
   assert(configuration?.version === 'phase-a-evidence-authority-client-1.1.0' &&
@@ -99,9 +113,38 @@ export function createEvidenceAuthorityClient({ configuration, credential, fetch
       throw infrastructureAuthority('evidence authority transport unavailable');
     } finally { clearTimeout(timer); }
   }
+  const observeIntent = async execution_intent_id => {
+    const result = await request('OBSERVE_EXECUTION_INTENT', { execution_intent_id });
+    const observation = result.observation;
+    let key;
+    try { key = createPublicKey(locked.observation_public_key); }
+    catch { throw authorityProtocol('signed authority-observation trust key unavailable'); }
+    try {
+      assert(key.asymmetricKeyType === 'ed25519', 'authority observation key must be Ed25519');
+      assert(observation && canonicalize(Object.keys(observation).sort()) === canonicalize(['body','signature']),
+        'authority observation envelope malformed');
+      assertValidSchema(observation.body, 'calibration-evidence-authority-observation.schema.json');
+      validateObservationState(observation.body);
+      assert(observation.body.execution_intent_id === execution_intent_id,
+        'authority observation intent mismatch');
+      assert(verify(null, Buffer.from(canonicalize(observation.body)), key,
+        Buffer.from(observation.signature ?? '', 'base64')), 'authority observation signature invalid');
+      if (observation.body.authority_head !== null) {
+        const head = observation.body.authority_head;
+        assert(canonicalize(Object.keys(head).sort()) === canonicalize(['body','signature']),
+          'authority head envelope malformed');
+        assertValidSchema(head.body, 'calibration-evidence-authority-head.schema.json');
+        assert(head.body.authority_id === observation.body.authority_id &&
+          head.body.evidence_head_key_id === keyIdentifier(key) && verify(null, Buffer.from(canonicalize(head.body)), key,
+            Buffer.from(head.signature ?? '', 'base64')), 'authority observation head identity invalid');
+      }
+    } catch { throw authorityProtocol('signed authority observation invalid'); }
+    return { observation: clone(observation) };
+  };
   return Object.freeze({ configuration: locked, request,
     finalize: input => request('FINALIZE_EXECUTION_INTENT', input),
     getIntent: execution_intent_id => request('GET_EXECUTION_INTENT', { execution_intent_id }),
+    observeIntent,
     putIntent: (execution_intent_id, record) => request('PUT_EXECUTION_INTENT', { execution_intent_id, record }),
     package_binding_hash: sha256(configuration) });
 }

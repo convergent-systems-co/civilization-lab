@@ -25,7 +25,7 @@ import { ACTION_CONTRACT_HASH } from "./contracts.js";
 import { assertMetricArtifact, CALIBRATION_METRIC_DEFINITION_HASH, decimalToScaled, deriveCalibrationMetricFacts, fixedRatio, metricFact } from "./calibration-metrics.js";
 import { PHASE_A_NEUTRAL_CONDITION, PHASE_A_POLICY_PACKAGE, PHASE_A_POLICY_PACKAGE_HASH, calibrationPolicyRequestBinding } from "./calibration-policy.js";
 import { PHASE_A_MODEL_RUNTIME_LOCK, PHASE_A_MODEL_RUNTIME_LOCK_HASH, materializePhaseARuntime } from "./calibration-runtime.js";
-import { CalibrationExecutionError, calibrationFailureClassification, implementationDefect, infrastructureDeadline } from "./calibration-errors.js";
+import { CalibrationExecutionError, calibrationFailureClassification, implementationDefect, infrastructureAuthority, infrastructureDeadline } from "./calibration-errors.js";
 import { validateEvidenceAuthorityConfiguration } from "./calibration-evidence-authority-client.js";
 
 const protocol = calibrationProtocol();
@@ -33,7 +33,7 @@ const baseline = JSON.parse(readFileSync(new URL("../validation/PRE_CALIBRATION_
 const deploymentTrustPolicy = JSON.parse(readFileSync(new URL("../config/calibration-trust-policy.json", import.meta.url), "utf8"));
 const BASELINE_COMMIT = "8f06baae4cda7d6fbd9d61924b5c615f4a45ba59";
 const BASELINE_TAG = "v0.1.0-pilot0";
-const STATE_VERSION = "phase-a-calibration-state-1.0.0";
+const STATE_VERSION = "phase-a-calibration-state-2.0.0";
 const MANIFEST_VERSION = "phase-a-calibration-manifest-2.0.0";
 const ATTESTATION_VERSION = "phase-a-calibration-attestation-1.0.0";
 const PROTOCOL_HASH = sha256(protocol);
@@ -170,6 +170,18 @@ export const CALIBRATION_FAILURES = Object.freeze({
   RESEARCH_DESIGN_BLOCKER: "RESEARCH_DESIGN_BLOCKER",
   ACCEPTED_CONFIGURATION: "ACCEPTED_CONFIGURATION"
 });
+
+export const CALIBRATION_EXECUTION_STATES = Object.freeze({
+  PENDING: "PENDING",
+  DISPATCHING: "DISPATCHING",
+  RUNNING: "RUNNING",
+  SUCCEEDED: "SUCCEEDED",
+  FAILED_RETRYABLE: "FAILED_RETRYABLE",
+  FAILED_TERMINAL: "FAILED_TERMINAL",
+  QUARANTINED: "QUARANTINED",
+  RECOVERING: "RECOVERING"
+});
+const executionStateSet = new Set(Object.values(CALIBRATION_EXECUTION_STATES));
 
 const failureSet = new Set(Object.values(CALIBRATION_FAILURES));
 const forbidden = new Set([...protocol.blinding.forbidden_input_fields, ...protocol.blinding.forbidden_outputs]
@@ -499,7 +511,11 @@ function adapterWorker(modulePath, declaration, operation, executionRequest = nu
       package_declaration: declaration, execution_request: executionRequest }),
     env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C", NODE_NO_WARNINGS: "1", ...allowedEnvironment } });
   if (child.error?.code === "ETIMEDOUT" || child.signal === "SIGTERM")
-    throw infrastructureDeadline("calibration adapter worker deadline exceeded");
+    throw infrastructureDeadline("calibration adapter worker deadline exceeded",
+      { boundary: "WORKER_DEADLINE_EXECUTION_STATE_UNCERTAIN" });
+  if (child.signal !== null)
+    throw infrastructureAuthority("calibration adapter worker exited with execution state uncertain",
+      { boundary: "WORKER_EXIT_EXECUTION_STATE_UNCERTAIN" });
   let result;
   try { result = JSON.parse(child.stdout); }
   catch { throw implementationDefect(`isolated calibration adapter emitted invalid protocol output (${sha256(child.stdout ?? "")})`); }
@@ -515,10 +531,20 @@ function adapterWorker(modulePath, declaration, operation, executionRequest = nu
       CALIBRATION_BLINDING_BREACH: "BLINDING_BREACH",
       CALIBRATION_RESEARCH_DESIGN_BLOCKER: "RESEARCH_DESIGN_BLOCKER"
     };
-    if (!(error && canonicalize(Object.keys(error).sort()) === canonicalize(["calibration_classification","code","reason","version"]) &&
-      error.version === "phase-a-adapter-worker-error-1.0.0" && safe[error.code] === error.calibration_classification && error.reason === error.code))
+    if (!(error && canonicalize(Object.keys(error).sort()) === canonicalize(["authority_observation","boundary","calibration_classification","code","evidence_head_receipts","raw_result","reason","version"]) &&
+      error.version === "phase-a-adapter-worker-error-1.1.0" && safe[error.code] === error.calibration_classification &&
+      error.reason === error.code && (error.boundary === null || typeof error.boundary === "string") &&
+      (error.authority_observation === null || typeof error.authority_observation === "object") &&
+      (error.raw_result === null || typeof error.raw_result === "object") && Array.isArray(error.evidence_head_receipts)))
       throw implementationDefect("isolated calibration adapter emitted invalid safe error metadata");
-    throw new CalibrationExecutionError(error.code, error.calibration_classification, `isolated adapter failure: ${error.code}`);
+    const failure = new CalibrationExecutionError(error.code, error.calibration_classification,
+      `isolated adapter failure: ${error.code}`, { boundary: error.boundary ?? undefined });
+    if (error.authority_observation !== null)
+      Object.defineProperty(failure, "calibrationAuthorityObservation", { value: clone(error.authority_observation) });
+    if (error.raw_result !== null) Object.defineProperty(failure, "calibrationRawResult", { value: clone(error.raw_result) });
+    if (error.evidence_head_receipts.length) Object.defineProperty(failure, "calibrationEvidenceHeadReceipts",
+      { value: clone(error.evidence_head_receipts) });
+    throw failure;
   }
   if (child.status !== 0 || child.stderr) throw implementationDefect(
     `isolated calibration adapter failed (status ${child.status}; diagnostic ${sha256(child.stderr ?? "")})`);
@@ -557,7 +583,9 @@ export async function loadCalibrationExecutionModule(modulePath, capability, opt
   const inspected = adapterWorker(path, declaration, "INSPECT");
   const loadRecord = { path, declaration: clone(declaration), execute: null,
     executeSourceHash: inspected.execute_source_hash, packageDigest: inspected.package_digest,
-    lastPackageDigest: null, recoverSupported: inspected.recover_supported };
+    lastPackageDigest: null, recoverSupported: inspected.recover_supported,
+    authorityEndpoint: inspected.contract.model_use_declared === false
+      ? signedEvidenceAuthorityConfiguration(path, declaration).endpoint : null };
   const invoke = async (operation, request) => {
     assertEmpiricalCapability(capability, { ...options, now: Date.now() });
     const response = adapterWorker(path, declaration, operation, request);
@@ -1121,7 +1149,7 @@ function assertRetainedHistory(prior, next) {
   if (!prior) return;
   for (const key of ["calibration_run_id", "protocol_version", "protocol_hash", "parameter_registry_hash", "implementation_commit",
     "implementation_tag", "tooling_distribution_digest", "baseline_tag_commit", "release_descriptor_hash", "authorization_hash",
-    "authorization_key_id", "campaign_id", "attestor_key_id", "execution_mode"])
+    "authorization_key_id", "campaign_id", "predecessor_failed_campaign", "attestor_key_id", "execution_mode"])
     assert(canonicalize(next[key]) === canonicalize(prior[key]), `calibration state invariant changed: ${key}`);
   const retained = (field, identity) => {
     const current = new Map((next[field] ?? []).map(item => [identity(item), item]));
@@ -1129,11 +1157,22 @@ function assertRetainedHistory(prior, next) {
       `signed calibration history deleted or mutated retained ${field}`);
   };
   retained("executions", item => item.key);
-  retained("quarantined_results", item => item.key);
+  retained("quarantined_results", item => item.attempt_id);
   retained("attempts", item => item.attempt_id);
   retained("assessments", item => item.parameter_set_hash);
   retained("candidates", item => item.parameter_set_hash);
   retained("incidents", item => sha256(item));
+  const executionAttempts = new Map((next.execution_attempts ?? []).map(item => [item.execution_attempt_id, item]));
+  for (const item of prior.execution_attempts ?? []) {
+    const current = executionAttempts.get(item.execution_attempt_id);
+    assert(current && current.key === item.key && current.logical_attempt_id === item.logical_attempt_id &&
+      current.parent_execution_attempt_id === item.parent_execution_attempt_id && current.request_hash === item.request_hash &&
+      canonicalize(current.preflight) === canonicalize(item.preflight) &&
+      canonicalize(current.transitions.slice(0, item.transitions.length)) === canonicalize(item.transitions) &&
+      current.transitions.length >= item.transitions.length &&
+      (current.next_execution_attempt_id === item.next_execution_attempt_id || item.next_execution_attempt_id === null),
+    "signed calibration history deleted or mutated retained execution attempt");
+  }
   for (const field of ["completed_keys", "visited_parameter_set_hashes"])
     assert((prior[field] ?? []).every(item => (next[field] ?? []).includes(item)), `signed calibration history deleted retained ${field}`);
   const intents = new Map((next.execution_intents ?? []).map(item => [item.key, item]));
@@ -1141,7 +1180,9 @@ function assertRetainedHistory(prior, next) {
     const current = intents.get(item.key);
     assert(current && current.attempt_id === item.attempt_id && current.request_hash === item.request_hash &&
       canonicalize(current.request) === canonicalize(item.request) &&
-      (current.status === item.status || (item.status === "DISPATCH_PENDING" && current.status === "EVIDENCE_PERSISTED")),
+      (current.status === item.status ||
+        ["PENDING","DISPATCHING","RUNNING","RECOVERING","QUARANTINED","FAILED_RETRYABLE"].includes(item.status) &&
+        ["DISPATCHING","RUNNING","RECOVERING","QUARANTINED","FAILED_RETRYABLE","FAILED_TERMINAL","SUCCEEDED"].includes(current.status)),
     "signed calibration history deleted or mutated retained execution intent");
   }
   assert(prior.result_ref === null || next.result_ref === prior.result_ref, "signed calibration history removed or changed result reference");
@@ -1162,7 +1203,7 @@ export class CalibrationArchive {
         (typeof process.getuid !== "function" || info.uid === process.getuid()) && realpathSync(this.directory) === this.directory,
       "empirical archive root must be a secure caller-owned canonical directory");
     }
-    for (const name of ["generations", "transactions", "evidence", "quarantine", "attempts", "candidates"]) await mkdir(join(this.directory, name), { recursive: true, mode: 0o700 });
+    for (const name of ["generations", "transactions", "evidence", "quarantine", "execution-attempts", "attempts", "candidates"]) await mkdir(join(this.directory, name), { recursive: true, mode: 0o700 });
   }
   async _exclusive(work) {
     await this._initializeDirectories();
@@ -1204,6 +1245,8 @@ export class CalibrationArchive {
       if (binding) assert(body.authorization_hash === binding.authorization_hash && body.authorization_key_id === binding.authorization_key_id &&
         body.campaign_id === binding.campaign_id && body.calibration_run_id === binding.calibration_run_id && body.attestor_key_id === binding.attestor_key_id,
       "calibration state empirical authorization/campaign binding mismatch");
+      if (binding) assert(canonicalize(body.predecessor_failed_campaign) === canonicalize(binding.predecessor_failed_campaign ?? null),
+        "calibration state predecessor-failed-campaign binding mismatch");
       assertRetainedHistory(prior?.body, body);
       assertValidSchema(body, "calibration-search-state.schema.json");
       history.push({ body, digest: sha256(envelope) });
@@ -1248,18 +1291,100 @@ export class CalibrationArchive {
       "orphan or missing quarantined adapter result detected; recovery fails closed");
     const intentKeys = new Set(this.state.execution_intents.map(item => item.key));
     assert(intentKeys.size === this.state.execution_intents.length && this.state.execution_intents.every(item =>
-      item.request_hash === sha256(item.request) && (item.status === "DISPATCH_PENDING" ||
-        (item.status === "EVIDENCE_PERSISTED" && this.state.executions.some(execution => execution.key === item.key)))),
+      item.request_hash === sha256(item.request) && executionStateSet.has(item.status) &&
+      (item.status !== CALIBRATION_EXECUTION_STATES.SUCCEEDED || this.state.executions.some(execution => execution.key === item.key))),
     "calibration execution intent lineage is inconsistent");
-    assert(this.state.executions.every(execution => this.state.execution_intents.some(intent => intent.key === execution.key && intent.status === "EVIDENCE_PERSISTED")),
-      "calibration evidence lacks its execution intent");
+    assert(this.state.executions.every(execution => this.state.execution_intents.some(intent =>
+      intent.key === execution.key && intent.status === CALIBRATION_EXECUTION_STATES.SUCCEEDED) &&
+      this.state.execution_attempts.some(attempt => attempt.execution_attempt_id === execution.execution_attempt_id &&
+        attempt.key === execution.key && attempt.transitions.at(-1).state === CALIBRATION_EXECUTION_STATES.SUCCEEDED)),
+    "calibration evidence lacks its successful execution intent");
+    const executionAttemptIds = new Set(this.state.execution_attempts.map(item => item.execution_attempt_id));
+    assert(executionAttemptIds.size === this.state.execution_attempts.length && this.state.execution_attempts.every(item => {
+      const intent = this.state.execution_intents.find(entry => entry.key === item.key);
+      const transitionsValid = item.transitions.length > 0 && item.transitions.every((transition, index) =>
+        transition.sequence === index && executionStateSet.has(transition.state));
+      const parentValid = item.parent_execution_attempt_id === null || executionAttemptIds.has(item.parent_execution_attempt_id);
+      const last = item.transitions.at(-1)?.state;
+      const successValid = last !== CALIBRATION_EXECUTION_STATES.SUCCEEDED ||
+        this.state.executions.some(execution => execution.execution_attempt_id === item.execution_attempt_id && execution.key === item.key);
+      return intent && intent.attempt_id === item.logical_attempt_id && intent.request_hash === item.request_hash &&
+        transitionsValid && parentValid && successValid;
+    }), "calibration execution-attempt lineage is inconsistent");
+    const executionKeys = new Set(this.state.executions.map(item => item.key));
+    assert(executionKeys.size === this.state.executions.length,
+      "one calibration key has more than one canonical execution outcome");
+    for (const key of intentKeys) {
+      const attempts = this.state.execution_attempts.filter(item => item.key === key);
+      const lastStates = attempts.map(item => item.transitions.at(-1).state);
+      const active = lastStates.filter(state => [CALIBRATION_EXECUTION_STATES.PENDING,
+        CALIBRATION_EXECUTION_STATES.DISPATCHING, CALIBRATION_EXECUTION_STATES.RUNNING,
+        CALIBRATION_EXECUTION_STATES.RECOVERING].includes(state));
+      assert(active.length <= 1 && lastStates.filter(state => state === CALIBRATION_EXECUTION_STATES.SUCCEEDED).length <= 1,
+        "calibration intent has multiple active attempts or accepted execution outcomes");
+    }
+    for (const item of this.state.execution_attempts) {
+      const last = item.transitions.at(-1).state;
+      const failed = [CALIBRATION_EXECUTION_STATES.FAILED_RETRYABLE,
+        CALIBRATION_EXECUTION_STATES.FAILED_TERMINAL, CALIBRATION_EXECUTION_STATES.QUARANTINED].includes(last);
+      assert(failed === (item.failure_record_path !== null && item.failure_record_hash !== null) &&
+        (last !== CALIBRATION_EXECUTION_STATES.SUCCEEDED || item.execution_record_path !== null),
+      "execution-attempt disposition lacks its canonical artifact");
+    }
+    const indexedExecutionAttemptArtifacts = new Set(this.state.execution_attempts
+      .filter(item => item.failure_record_path !== null).map(item => item.failure_record_path));
+    const actualExecutionAttemptArtifacts = (await readdir(join(this.directory, "execution-attempts")))
+      .filter(name => name.endsWith(".json")).map(name => `execution-attempts/${name}`);
+    assert(actualExecutionAttemptArtifacts.every(path => indexedExecutionAttemptArtifacts.has(path)) &&
+      [...indexedExecutionAttemptArtifacts].every(path => actualExecutionAttemptArtifacts.includes(path)),
+    "orphan or missing execution-attempt failure record detected; recovery fails closed");
+    for (const item of this.state.execution_attempts.filter(entry => entry.failure_record_path !== null)) {
+      const record = JSON.parse(await readFile(join(this.directory, item.failure_record_path), "utf8"));
+      assert(item.failure_record_hash === sha256(record), "execution-attempt failure record hash mismatch");
+      assertValidSchema(record, "calibration-execution-attempt.schema.json");
+      assert(record.execution_attempt_id === item.execution_attempt_id && record.calibration_key === item.key &&
+        record.logical_attempt_id === item.logical_attempt_id &&
+        record.parent_execution_attempt_id === item.parent_execution_attempt_id &&
+        record.execution_request_hash === item.request_hash && canonicalize(record.preflight) === canonicalize(item.preflight) &&
+        canonicalize(record.transitions) === canonicalize(item.transitions),
+      "execution-attempt failure record differs from its signed state snapshot");
+      if (record.authority_observation !== null) {
+        const observation = record.authority_observation;
+        assert(canonicalize(Object.keys(observation).sort()) === canonicalize(["body","signature"]),
+          "archived authority observation envelope malformed");
+        assertValidSchema(observation.body, "calibration-evidence-authority-observation.schema.json");
+        const headKey = createPublicKey(this.trust.evidenceAuthority?.headPublicKey);
+        assert(headKey.asymmetricKeyType === "ed25519" && verify(null, Buffer.from(canonicalize(observation.body)), headKey,
+          Buffer.from(observation.signature, "base64")), "archived authority observation signature invalid");
+        assert(observation.body.execution_intent_id === this.state.execution_intents.find(intent => intent.key === item.key).request.idempotencyKey,
+          "archived authority observation intent mismatch");
+        const body = observation.body;
+        assert(body.state === "ABSENT" ? body.request_hash === null && body.result === null && body.finalization_hash === null
+          : body.state === "INTENT_STORED" ? body.request_hash !== null && body.result === null && body.finalization_hash === null
+            : body.state === "FINALIZATION_PENDING" ? body.request_hash !== null && body.result === null && body.finalization_hash !== null
+              : body.state === "FINALIZED" && body.request_hash !== null && body.result !== null && body.finalization_hash !== null,
+        "archived authority observation state fields conflict");
+        if (body.authority_head !== null) {
+          assertValidSchema(body.authority_head.body, "calibration-evidence-authority-head.schema.json");
+          assert(body.authority_head.body.authority_id === body.authority_id &&
+            body.authority_head.body.evidence_head_key_id === calibrationKeyId(headKey) &&
+            verify(null, Buffer.from(canonicalize(body.authority_head.body)), headKey,
+              Buffer.from(body.authority_head.signature, "base64")),
+          "archived authority observation head identity invalid");
+        }
+      }
+    }
     const indexedAttempts = new Set(this.state.attempts.map(item => item.attempt_id));
     const actualAttempts = (await readdir(join(this.directory, "attempts"), { withFileTypes: true })).filter(item => item.isDirectory()).map(item => item.name);
     assert(actualAttempts.every(id => indexedAttempts.has(id)) && [...indexedAttempts].every(id => actualAttempts.includes(id)),
       "orphan calibration attempt or missing retained attempt detected; recovery fails closed");
     const completed = new Set(this.state.completed_keys);
-    assert(this.state.attempts.every(item => completed.has(item.key)) && this.state.completed_keys.every(key => this.state.attempts.some(item => item.key === key)),
-      "completed-key index differs from retained calibration attempts");
+    const terminalCalibrationAttempts = this.state.attempts.filter(item =>
+      [CALIBRATION_FAILURES.PARAMETER_FAILURE, CALIBRATION_FAILURES.ACCEPTED_CONFIGURATION].includes(item.status));
+    assert(completed.size === this.state.completed_keys.length && terminalCalibrationAttempts.length === this.state.attempts.length &&
+      terminalCalibrationAttempts.every(item => completed.has(item.key)) &&
+      this.state.completed_keys.every(key => terminalCalibrationAttempts.filter(item => item.key === key).length === 1),
+    "completed-key index differs from valid terminal calibration dispositions");
     const breachAttempts = this.state.attempts.filter(item => item.status === CALIBRATION_FAILURES.BLINDING_BREACH);
     assert(breachAttempts.every(item => this.state.incidents.some(incident => incident.affected_decision === item.attempt_id)) &&
       (!breachAttempts.length || this.state.status === "FAILED"), "blinding breach lacks its atomic protocol incident/failure disposition");
@@ -1307,7 +1432,7 @@ export class CalibrationArchive {
     if (pointer?.generation === next.generation && pointer.digest === digest) return;
     assert(pointer === null || (pointer.generation === next.generation - 1 && pointer.digest === next.parent_generation_digest), "calibration state pointer mismatch or rollback");
     for (const artifact of body.artifacts) {
-      assert(/^(evidence\/[^/]+\.json|quarantine\/[^/]+\.json|attempts\/[^/]+\/(canonical-evidence|metrics|manifest)\.json|candidates\/[^/]+\.json|CALIBRATION_RESULT\.json|PILOT_0_WORLD_CONFIGURATION\.json)$/.test(artifact.path) && !artifact.path.includes(".."), "unsafe calibration publication path");
+      assert(/^(evidence\/[^/]+\.json|quarantine\/[^/]+\.json|execution-attempts\/[^/]+\.json|attempts\/[^/]+\/(canonical-evidence|metrics|manifest)\.json|candidates\/[^/]+\.json|CALIBRATION_RESULT\.json|PILOT_0_WORLD_CONFIGURATION\.json)$/.test(artifact.path) && !artifact.path.includes(".."), "unsafe calibration publication path");
       await immutable(join(this.directory, artifact.path), artifact.value);
     }
     await immutable(this._generationPath(next.generation), body.generation_envelope);
@@ -1324,6 +1449,7 @@ export class CalibrationArchive {
     next.authorization_hash = this.trust.executionBinding?.authorization_hash ?? null;
     next.authorization_key_id = this.trust.executionBinding?.authorization_key_id ?? null;
     next.campaign_id = this.trust.executionBinding?.campaign_id ?? null;
+    next.predecessor_failed_campaign = clone(this.trust.executionBinding?.predecessor_failed_campaign ?? null);
     if (this.trust.executionBinding?.calibration_run_id) next.calibration_run_id = this.trust.executionBinding.calibration_run_id;
     next.attestor_key_id = attestationAuthority(this.trust).keyId;
     assertValidSchema(next, "calibration-search-state.schema.json");
@@ -1359,10 +1485,11 @@ export class CalibrationArchive {
         authorization_hash: this.trust.executionBinding?.authorization_hash ?? null,
         authorization_key_id: this.trust.executionBinding?.authorization_key_id ?? null,
         campaign_id: this.trust.executionBinding?.campaign_id ?? null,
+        predecessor_failed_campaign: clone(this.trust.executionBinding?.predecessor_failed_campaign ?? null),
         attestor_key_id: attestationAuthority(this.trust).keyId,
         status: "READY", execution_mode: executionMode, round_improved: false, current_round: 0, incumbent_parameter_set_hash: null,
         search_cursor: { round: 0, operation_index: 0, candidate_index: 0 }, visited_parameter_set_hashes: [], assessments: [],
-        execution_intents: [], executions: [], quarantined_results: [], attempts: [], candidates: [], completed_keys: [], incidents: [], result_ref: null };
+        execution_intents: [], execution_attempts: [], executions: [], quarantined_results: [], attempts: [], candidates: [], completed_keys: [], incidents: [], result_ref: null };
       this.head = null;
       return this._publish(this.state, null).then(() => this);
     });
@@ -1406,12 +1533,139 @@ export class CalibrationArchive {
           "calibration execution intent mutation or idempotency-key collision");
         return clone(existing);
       }
-      const intent = { key, attempt_id: attemptId, request: clone(request), request_hash: requestHash, status: "DISPATCH_PENDING" };
+      const intent = { key, attempt_id: attemptId, request: clone(request), request_hash: requestHash, status: CALIBRATION_EXECUTION_STATES.PENDING };
       const next = clone(this.state); next.execution_intents.push(intent);
       await this._publish(next, expectedHead); return clone(intent);
     });
   }
-  async recordEvidence({ attemptId, parameterSetHash, seed, bundle, executionContext = null }) {
+
+  _executionFailureRecord({ item, intent, classification, errorCode, errorDigest, boundary,
+    authorityEndpointIdentity = null, authorityObservation = null,
+    partialCanonicalEvidence = null, evidenceHeadReceipts = [] }) {
+    const request = intent.request;
+    return {
+      schema_version: "phase-a-execution-attempt-1.0.0",
+      execution_attempt_id: item.execution_attempt_id, calibration_key: item.key,
+      logical_attempt_id: item.logical_attempt_id, parent_execution_attempt_id: item.parent_execution_attempt_id,
+      calibration_run_id: this.state.calibration_run_id, parameter_set_hash: sha256(request.parameterSet), seed: request.seed,
+      execution_intent_id: request.idempotencyKey, execution_request_hash: intent.request_hash,
+      protocol_hash: PROTOCOL_HASH, tooling_version: CALIBRATION_TOOLING_VERSION,
+      tooling_distribution_digest: calibrationToolingDistributionDigest(), implementation_commit: BASELINE_COMMIT,
+      release_descriptor_hash: this.state.release_descriptor_hash,
+      policy_assignment_hash: request.policyBinding.assignment_hash,
+      authority_endpoint_identity: authorityEndpointIdentity,
+      authority_observation: clone(authorityObservation),
+      preflight: clone(item.preflight),
+      transitions: clone(item.transitions), failure_boundary: boundary ?? "ADAPTER_FAILURE_RETURNED",
+      last_successful_boundary: (() => {
+        if (boundary === "AFTER_AUTHORITY_FINALIZE_BEFORE_RUNNER_ACK") return "AUTHORITATIVE_FINALIZATION_COMPLETED";
+        const observed = authorityObservation?.body?.state;
+        if (observed === "FINALIZED") return "AUTHORITATIVE_FINALIZATION_CONFIRMED";
+        if (observed === "FINALIZATION_PENDING") return "AUTHORITATIVE_PENDING_FINALIZATION_CONFIRMED";
+        if (observed === "INTENT_STORED") return "AUTHORITATIVE_EXECUTION_INTENT_CONFIRMED";
+        if (observed === "ABSENT") return "AUTHORITATIVE_INTENT_ABSENCE_CONFIRMED";
+        if (boundary === "BEFORE_DISPATCH_AUTHORITY_RECONCILIATION") return "EXECUTION_INTENT_ARCHIVED";
+        if (boundary === "AFTER_DISPATCH_BEFORE_WORLD_EXECUTION") return "ADAPTER_DISPATCH_STARTED";
+        if (boundary === "AFTER_FIRST_CANONICAL_EVENT") return "NONAUTHORITATIVE_FIRST_EVENT_EMITTED";
+        if (boundary === "DURING_WORLD_EXECUTION") return "NONAUTHORITATIVE_WORLD_EXECUTION_STARTED";
+        if (boundary === "EVIDENCE_COMMIT_ACKNOWLEDGEMENT_UNCERTAIN") return "EXACT_REPLAY_COMPLETED_AUTHORITY_COMMIT_UNCONFIRMED";
+        return "NO_CONFIRMED_EXECUTION_BOUNDARY";
+      })(),
+      partial_canonical_evidence: partialCanonicalEvidence ?? { status: "ABSENT_NOT_EMITTED", event_refs: [] },
+      evidence_head_receipts: clone(evidenceHeadReceipts),
+      infrastructure_error: classification === CALIBRATION_FAILURES.INFRASTRUCTURE_FAILURE
+        ? { classification, code: errorCode, message_digest: errorDigest }
+        : { classification: "NOT_APPLICABLE", code: null, message_digest: null },
+      root_cause: { classification, code: errorCode, message_digest: errorDigest,
+        detail_status: "SANITIZED_STRUCTURED_CONTEXT", structured_context: {
+          failure_boundary: boundary ?? "ADAPTER_FAILURE_RETURNED",
+          authority_state: authorityObservation?.body?.state ?? "NOT_OBSERVED",
+          authoritative_request_hash: authorityObservation?.body?.request_hash ?? null,
+          authoritative_finalization_hash: authorityObservation?.body?.finalization_hash ?? null,
+          partial_evidence_status: partialCanonicalEvidence?.status ?? "ABSENT_NOT_EMITTED",
+          evidence_head_receipt_count: evidenceHeadReceipts.length
+        } },
+      quarantine_status: item.transitions.at(-1).state === CALIBRATION_EXECUTION_STATES.QUARANTINED
+        ? "QUARANTINED_UNCERTAIN_AUTHORITY_STATE" : "NOT_QUARANTINED",
+      recovery_eligibility: item.recovery_eligibility
+    };
+  }
+
+  async beginExecutionAttempt({ attemptId, parameterSetHash, seed, request, recovering = false,
+    authorityEndpointIdentity = null, preflight = null }) {
+    const key = `${parameterSetHash}:${seed}`, expectedHead = this.head?.digest ?? null;
+    return this._exclusive(async () => {
+      await this._loadLocked({ skipOrphans: true });
+      assert(this.head.digest === expectedHead && !this.state.completed_keys.includes(key),
+        "completed calibration key cannot start another execution attempt");
+      const next = clone(this.state), intent = next.execution_intents.find(item => item.key === key);
+      assert(intent && intent.attempt_id === attemptId && intent.request_hash === sha256(request) &&
+        canonicalize(intent.request) === canonicalize(request), "execution attempt differs from immutable logical intent");
+      const prior = next.execution_attempts.filter(item => item.key === key).at(-1) ?? null;
+      const artifacts = [];
+      if (prior && [CALIBRATION_EXECUTION_STATES.PENDING, CALIBRATION_EXECUTION_STATES.DISPATCHING,
+        CALIBRATION_EXECUTION_STATES.RUNNING, CALIBRATION_EXECUTION_STATES.RECOVERING]
+        .includes(prior.transitions.at(-1).state)) return clone(prior);
+      assert(!prior || prior.transitions.at(-1).state !== CALIBRATION_EXECUTION_STATES.FAILED_TERMINAL,
+        "terminal execution failure requires a new authorized implementation campaign");
+      const ordinal = next.execution_attempts.filter(item => item.key === key).length;
+      const executionAttemptId = stableId("calibration-execution-attempt", this.state.calibration_run_id, key, ordinal);
+      if (prior) prior.next_execution_attempt_id = executionAttemptId;
+      assert(!prior || prior.transitions.at(-1).state !== CALIBRATION_EXECUTION_STATES.SUCCEEDED,
+        "successful execution cannot be delivered twice");
+      const initial = recovering || prior ? CALIBRATION_EXECUTION_STATES.RECOVERING : CALIBRATION_EXECUTION_STATES.PENDING;
+      const transitions = [{ sequence: 0, state: initial,
+        boundary: initial === CALIBRATION_EXECUTION_STATES.RECOVERING ? "AUTHORITY_RECONCILIATION_REQUESTED" : "EXECUTION_ATTEMPT_CREATED",
+        recorded_at: null, turn: null }];
+      if (initial === CALIBRATION_EXECUTION_STATES.PENDING)
+        transitions.push({ sequence: 1, state: CALIBRATION_EXECUTION_STATES.DISPATCHING,
+          boundary: "ADAPTER_DISPATCH_STARTED", recorded_at: null, turn: null });
+      transitions.push({ sequence: transitions.length, state: CALIBRATION_EXECUTION_STATES.RUNNING,
+        boundary: "ADAPTER_INVOCATION_ACTIVE", recorded_at: null, turn: null });
+      const item = { execution_attempt_id: executionAttemptId, key, logical_attempt_id: attemptId,
+        parent_execution_attempt_id: prior?.execution_attempt_id ?? null, request_hash: intent.request_hash,
+        preflight: clone(preflight ?? { status: "SYNTHETIC_CONFORMANCE", authorization_hash: null,
+          release_descriptor_hash: null }),
+        transitions, failure_record_path: null, failure_record_hash: null, execution_record_path: null,
+        recovery_eligibility: "NOT_APPLICABLE", next_execution_attempt_id: null };
+      next.execution_attempts.push(item); intent.status = initial === CALIBRATION_EXECUTION_STATES.RECOVERING
+        ? CALIBRATION_EXECUTION_STATES.RECOVERING : CALIBRATION_EXECUTION_STATES.RUNNING;
+      await this._publish(next, expectedHead, artifacts); return clone(item);
+    });
+  }
+
+  async recordExecutionAttemptFailure({ executionAttemptId, classification, errorCode, errorMessage,
+    boundary = null, authorityEndpointIdentity = null, authorityObservation = null,
+    partialCanonicalEvidence = null, evidenceHeadReceipts = [] }) {
+    assert(failureSet.has(classification) && classification !== CALIBRATION_FAILURES.PARAMETER_FAILURE &&
+      classification !== CALIBRATION_FAILURES.ACCEPTED_CONFIGURATION, "invalid execution-attempt failure classification");
+    const expectedHead = this.head?.digest ?? null;
+    return this._exclusive(async () => {
+      await this._loadLocked({ skipOrphans: true }); assert(this.head.digest === expectedHead, "stale calibration archive head");
+      const next = clone(this.state), item = next.execution_attempts.find(entry => entry.execution_attempt_id === executionAttemptId);
+      assert(item && item.transitions.at(-1).state === CALIBRATION_EXECUTION_STATES.RUNNING,
+        "execution attempt is not active");
+      const intent = next.execution_intents.find(entry => entry.key === item.key);
+      const retryableBeforeDispatch = classification === CALIBRATION_FAILURES.INFRASTRUCTURE_FAILURE &&
+        boundary === "BEFORE_DISPATCH_AUTHORITY_RECONCILIATION";
+      const state = classification !== CALIBRATION_FAILURES.INFRASTRUCTURE_FAILURE
+        ? CALIBRATION_EXECUTION_STATES.FAILED_TERMINAL
+        : retryableBeforeDispatch ? CALIBRATION_EXECUTION_STATES.FAILED_RETRYABLE : CALIBRATION_EXECUTION_STATES.QUARANTINED;
+      item.transitions.push({ sequence: item.transitions.length, state, boundary: boundary ?? "ADAPTER_FAILURE_RETURNED",
+        recorded_at: null, turn: null });
+      item.recovery_eligibility = state === CALIBRATION_EXECUTION_STATES.FAILED_RETRYABLE ? "ELIGIBLE"
+        : state === CALIBRATION_EXECUTION_STATES.QUARANTINED ? "AUTHORITY_RECONCILIATION_REQUIRED" : "TERMINAL";
+      const record = this._executionFailureRecord({ item, intent, classification, errorCode,
+        errorDigest: sha256(String(errorMessage)), boundary, authorityEndpointIdentity,
+        authorityObservation, partialCanonicalEvidence, evidenceHeadReceipts });
+      item.failure_record_path = `execution-attempts/${executionAttemptId}.json`; item.failure_record_hash = sha256(record);
+      intent.status = state;
+      if (state === CALIBRATION_EXECUTION_STATES.FAILED_TERMINAL) next.status = "FAILED";
+      await this._publish(next, expectedHead, [{ path: item.failure_record_path, value: record }]); return clone(record);
+    });
+  }
+
+  async recordEvidence({ attemptId, executionAttemptId, parameterSetHash, seed, bundle, executionContext = null }) {
     const expectedHead = this.head?.digest ?? null;
     return this._exclusive(async () => {
       await this._loadLocked({ skipOrphans: true });
@@ -1431,13 +1685,8 @@ export class CalibrationArchive {
         scanForbidden(executionContext, "$execution_context", new Set(this.trust.evidenceAuthority?.policyId ? [this.trust.evidenceAuthority.policyId] : []));
       }
       const store = loadEvidence(bundle);
-      let intent = this.state.execution_intents.find(item => item.key === key);
-      if (!intent) {
-        assert(executionContext?.execution_request && executionContext.execution_request_hash === sha256(executionContext.execution_request),
-          "canonical evidence lacks its execution request lineage");
-        intent = { key, attempt_id: attemptId, request: clone(executionContext.execution_request),
-          request_hash: executionContext.execution_request_hash, status: "EVIDENCE_PERSISTED" };
-      } else assert(intent.attempt_id === attemptId && intent.request_hash === sha256(intent.request),
+      const intent = this.state.execution_intents.find(item => item.key === key);
+      assert(intent && intent.attempt_id === attemptId && intent.request_hash === sha256(intent.request),
         "canonical evidence lacks its durable execution intent");
       const genesis = store.events.find(event => event.event_type === "RunCreated");
       assert(store.runId && genesis && protocol.seed_panel.seeds.includes(seed) && payload(genesis).seed === seed,
@@ -1445,9 +1694,17 @@ export class CalibrationArchive {
       const path = `evidence/${attemptId}.json`, evidenceHash = sha256(bundle);
       const record = { schema_version: "1.0.0", bundle: clone(bundle), execution_context: clone(executionContext) };
       const next = clone(this.state);
-      if (!next.execution_intents.some(item => item.key === key)) next.execution_intents.push(clone(intent));
-      next.executions.push({ key, attempt_id: attemptId, path, evidence_hash: evidenceHash, record_hash: sha256(record) });
-      next.execution_intents.find(item => item.key === key).status = "EVIDENCE_PERSISTED";
+      const executionAttempt = next.execution_attempts.find(item => item.execution_attempt_id === executionAttemptId);
+      assert(executionAttempt && executionAttempt.key === key &&
+        executionAttempt.transitions.at(-1).state === CALIBRATION_EXECUTION_STATES.RUNNING,
+      "canonical evidence lacks its active execution-attempt lineage");
+      executionAttempt.transitions.push({ sequence: executionAttempt.transitions.length,
+        state: CALIBRATION_EXECUTION_STATES.SUCCEEDED, boundary: "CANONICAL_EVIDENCE_ARCHIVED",
+        recorded_at: null, turn: null });
+      executionAttempt.execution_record_path = path; executionAttempt.recovery_eligibility = "NOT_APPLICABLE";
+      next.executions.push({ key, attempt_id: attemptId, execution_attempt_id: executionAttemptId,
+        path, evidence_hash: evidenceHash, record_hash: sha256(record) });
+      next.execution_intents.find(item => item.key === key).status = CALIBRATION_EXECUTION_STATES.SUCCEEDED;
       await this._publish(next, expectedHead, [{ path, value: record }]); return clone(bundle);
     });
   }
@@ -1456,7 +1713,8 @@ export class CalibrationArchive {
     return this._exclusive(async () => {
       await this._loadLocked({ skipOrphans: true });
       assert(this.head.digest === expectedHead && this.state.status !== "COMPLETE", "cannot quarantine against stale or complete archive");
-      const key = `${parameterSetHash}:${seed}`, hash = sha256(result), existing = (this.state.quarantined_results ?? []).find(item => item.key === key);
+      const key = `${parameterSetHash}:${seed}`, hash = sha256(result), existing =
+        (this.state.quarantined_results ?? []).find(item => item.attempt_id === attemptId);
       if (existing) { assert(existing.result_hash === hash, "quarantined adapter result mutation"); return clone(existing); }
       const path = `quarantine/${attemptId}.json`, record = { schema_version: "phase-a-quarantined-adapter-result-1.0.0",
         attempt_id: attemptId, execution_intent_id: this.state.execution_intents.find(item => item.key === key)?.request?.idempotencyKey ?? null,
@@ -1654,7 +1912,9 @@ export class CalibrationArchive {
       modelUseDeclared: this.trust.evidenceAuthority?.modelUseDeclared ?? null };
   }
   async recordAttempt(attempt, artifacts, { incident = null } = {}) {
-    assert(attempt.attempt_id && attempt.seed && /^[a-f0-9]{64}$/.test(attempt.parameter_set_hash) && failureSet.has(attempt.status), "invalid calibration attempt record");
+    assert(attempt.attempt_id && attempt.seed && /^[a-f0-9]{64}$/.test(attempt.parameter_set_hash) &&
+      [CALIBRATION_FAILURES.PARAMETER_FAILURE, CALIBRATION_FAILURES.ACCEPTED_CONFIGURATION].includes(attempt.status),
+    "only a valid terminal calibration disposition may complete a calibration key");
     const key = `${attempt.parameter_set_hash}:${attempt.seed}`;
     assert(!this.state.completed_keys.includes(key), "calibration attempt already recorded; records are immutable");
     const expectedHead = this.head?.digest ?? null;
@@ -2098,7 +2358,8 @@ export class PhaseACalibrationRunner {
     }
     const executionBinding = this.mode === "EMPIRICAL_CALIBRATION" ? { authorization_hash: sha256(this.authorization),
       authorization_key_id: this.authorization.key_id, campaign_id: this.authorization.campaign_id,
-      calibration_run_id: this.authorization.calibration_run_id, attestor_key_id: this.authorization.attestor_key_id } : null;
+      calibration_run_id: this.authorization.calibration_run_id, attestor_key_id: this.authorization.attestor_key_id,
+      predecessor_failed_campaign: clone(this.authorization.predecessor_failed_campaign ?? null) } : null;
     const archiveTrust = normalizeTrust({ ...normalizedArchiveAuthority, releaseBinding, evidenceAuthority, codingTrust: this.codingTrust,
       fault: this.fault, attestationAuthority: attestationTrust, executionBinding });
     assert(this.mode === "SYNTHETIC_CONFORMANCE" || archiveTrust.trustScope !== "SYNTHETIC_CONFORMANCE", "empirical calibration requires externally authenticated archive trust");
@@ -2240,10 +2501,9 @@ export class PhaseACalibrationRunner {
           adapterPackageHash: this.mode === "EMPIRICAL_CALIBRATION" ? loadedAdapter?.packageDigest ?? null : null,
           neutralPolicyManifest: this.mode === "EMPIRICAL_CALIBRATION" ? clone(this.authorization.policy_manifest) : null,
           modelRuntimeLock: this.mode === "EMPIRICAL_CALIBRATION" ? clone(CALIBRATION_MODEL_RUNTIME_LOCK) : null });
-        const pendingIntent = archive.state.execution_intents.find(item => item.key === key && item.status === "DISPATCH_PENDING");
+        const priorIntent = archive.state.execution_intents.find(item => item.key === key);
         const executionRequestHash = sha256(executionRequest);
-        if (this.mode === "EMPIRICAL_CALIBRATION" || this.executor?.durableIntentConformance === true)
-          await archive.recordExecutionIntent({ attemptId, parameterSetHash: parameterHash, seed, request: executionRequest });
+        await archive.recordExecutionIntent({ attemptId, parameterSetHash: parameterHash, seed, request: executionRequest });
         const checkpoint = await archive.executionRecord(parameterHash, seed);
         if (checkpoint) {
           const context = checkpoint.execution_context ?? {};
@@ -2251,14 +2511,34 @@ export class PhaseACalibrationRunner {
             expectedParameterSet: parameterSet, expectedSeed: seed, ...archive.collectionOptions(checkpoint.bundle, context)
           })); continue;
         }
-        let bundle, observation, executionContext = null, returnedExecution = null, classification = CALIBRATION_FAILURES.PARAMETER_FAILURE;
+        const authorityEndpointIdentity = loadedAdapter?.authorityEndpoint ?? null;
+        if (this.mode === "EMPIRICAL_CALIBRATION") {
+          assertEmpiricalCapability(this.authorization, {
+            archiveDirectory: this.directory, authorizationTrust: this.authorizationTrust,
+            releaseDescriptor: this.releaseDescriptor, releaseTrust: this.releaseTrust, trustPolicy: this.trustPolicy,
+            revocationRegistry: this.revocationRegistry, now: Date.now()
+          });
+          assertEmpiricalCalibrationAuthorization(this.authorization, this.executor, {
+            archiveDirectory: this.directory, authorizationTrust: this.authorizationTrust,
+            releaseDescriptor: this.releaseDescriptor, releaseTrust: this.releaseTrust, trustPolicy: this.trustPolicy,
+            revocationRegistry: this.revocationRegistry, now: Date.now()
+          });
+        }
+        const dispatchPreflight = this.mode === "EMPIRICAL_CALIBRATION"
+          ? { status: "PASSED_BEFORE_DISPATCH", authorization_hash: sha256(this.authorization),
+            release_descriptor_hash: sha256(this.releaseDescriptor) }
+          : { status: "SYNTHETIC_CONFORMANCE", authorization_hash: null, release_descriptor_hash: null };
+        const executionAttempt = await archive.beginExecutionAttempt({ attemptId, parameterSetHash: parameterHash,
+          seed, request: executionRequest, recovering: priorIntent !== undefined, authorityEndpointIdentity,
+          preflight: dispatchPreflight });
+        let bundle, observation, executionContext = null, returnedExecution = null;
         try {
           if (this.mode === "EMPIRICAL_CALIBRATION") assertEmpiricalCapability(this.authorization, {
             archiveDirectory: this.directory, authorizationTrust: this.authorizationTrust,
             releaseDescriptor: this.releaseDescriptor, releaseTrust: this.releaseTrust, trustPolicy: this.trustPolicy,
             revocationRegistry: this.revocationRegistry, now: Date.now()
           });
-          const execute = pendingIntent && typeof this.executor?.recover === "function"
+          const execute = priorIntent && typeof this.executor?.recover === "function"
             ? this.executor.recover.bind(this.executor)
             : typeof this.executor === "function" ? this.executor : this.executor.execute.bind(this.executor);
           assert(execute, "empirical adapter cannot recover a durable execution intent after restart");
@@ -2279,36 +2559,24 @@ export class PhaseACalibrationRunner {
             ...archive.collectionOptions(bundle, executionContext ?? {}) });
         }
         catch (error) {
-          classification = calibrationFailureClassification(error, CALIBRATION_FAILURES.IMPLEMENTATION_DEFECT);
+          const classification = calibrationFailureClassification(error, CALIBRATION_FAILURES.IMPLEMENTATION_DEFECT);
           const rawResult = error.calibrationRawResult ?? returnedExecution;
-          const quarantined = rawResult === null ? null : await archive.quarantineAdapterResult({ attemptId,
+          const quarantined = rawResult === null ? null : await archive.quarantineAdapterResult({ attemptId: executionAttempt.execution_attempt_id,
             parameterSetHash: parameterHash, seed, result: rawResult });
-          const failureEvidence = { classification, error_code: error.code ?? "CALIBRATION_IMPLEMENTATION_DEFECT",
-            error_digest: sha256(String(error.message)), seed, parameter_set_hash: parameterHash,
-            quarantined_adapter_result_ref: quarantined?.path ?? null, quarantined_adapter_result_hash: quarantined?.result_hash ?? null };
-          const failureMetrics = {};
-          const failure = { schema_version: MANIFEST_VERSION, tooling_version: CALIBRATION_TOOLING_VERSION, calibration_run_id: archive.state.calibration_run_id, attempt_id: attemptId,
-            implementation_commit: BASELINE_COMMIT, implementation_tag: BASELINE_TAG,
-            tooling_distribution_digest: calibrationToolingDistributionDigest(), baseline_tag_commit: BASELINE_COMMIT,
-            release_descriptor_hash: releaseBinding.descriptor_hash, protocol_version: protocol.protocol_version,
-            specification_versions: baseline.specification_sha256,
-            parameter_registry_version: registry.registry_version, parameter_set: parameterSet, parameter_set_hash: parameterHash,
-            parameter_classifications: Object.fromEntries(registry.parameters.map(entry => [entry.parameter_id, entry.classification])),
-            seed, seeds: [seed], execution_intent_id: executionRequest.idempotencyKey, execution_request_hash: executionRequestHash,
-            rng_provenance_ref: `addressed-rng://${seed}`, policy_configuration: policyConfiguration,
-            model_runtime_configuration: modelRuntimeConfiguration, runtime_environment: runtimeFingerprint(),
-            canonical_evidence_ref: quarantined ? quarantined.path : `unavailable://${classification}`,
-            metrics: failureMetrics, treatment_blinding: protocol.blinding.selection_view, failure_classification: classification, status: classification,
-            stopping_rule_hash: sha256(protocol.stopping_rule), evidence_hashes: [sha256(failureEvidence)], metric_artifact_hash: sha256(canonicalize(failureMetrics) + "\n"),
-            reason: `execution failed: ${classification}`, created_at: new Date(0).toISOString() };
-          failure.attestation = attestCalibrationAttempt(failure, manifestAttestor);
-          const incident = classification === CALIBRATION_FAILURES.BLINDING_BREACH ? calibrationProtocolIncident({
-            disclosure: error.message, affectedDecision: attemptId, detectedAt: new Date(0).toISOString(), authority: archiveTrust.keyId
-          }) : null;
-          await archive.recordAttempt(failure, { evidence: failureEvidence, metrics: failureMetrics }, { incident });
+          await archive.recordExecutionAttemptFailure({ executionAttemptId: executionAttempt.execution_attempt_id,
+            classification, errorCode: error.code ?? "CALIBRATION_IMPLEMENTATION_DEFECT", errorMessage: error.message,
+            boundary: error.calibrationBoundary ?? "ADAPTER_FAILURE_RETURNED", authorityEndpointIdentity,
+            authorityObservation: error.calibrationAuthorityObservation ?? null,
+            partialCanonicalEvidence: quarantined ? { status: "QUARANTINED_UNTRUSTED_ADAPTER_RESULT",
+              event_refs: [], quarantined_adapter_result_ref: quarantined.path,
+              quarantined_adapter_result_hash: quarantined.result_hash } : null,
+            evidenceHeadReceipts: error.calibrationEvidenceHeadReceipts ?? [] });
+          if (classification === CALIBRATION_FAILURES.BLINDING_BREACH)
+            await archive.recordIncident({ disclosure: error.message, affectedDecision: executionAttempt.execution_attempt_id });
           throw error;
         }
-        bundle = await archive.recordEvidence({ attemptId, parameterSetHash: parameterHash, seed, bundle, executionContext });
+        bundle = await archive.recordEvidence({ attemptId, executionAttemptId: executionAttempt.execution_attempt_id,
+          parameterSetHash: parameterHash, seed, bundle, executionContext });
         await this.fault("after_evidence_persisted", { parameter_set_hash: parameterHash, seed, attempt_id: attemptId });
         observations.push(observation); bundles.set(seed, bundle);
       }
@@ -2442,4 +2710,4 @@ export class PhaseACalibrationRunner {
   }
 }
 
-export const CALIBRATION_TOOLING_VERSION = "phase-a-calibration-tooling-1.0.0";
+export const CALIBRATION_TOOLING_VERSION = "phase-a-calibration-tooling-1.1.0";

@@ -92,7 +92,7 @@ function retainedAttempt({ calibrationRunId, seed, status, reason }) {
   const parameterSet = { ...start, "world.economy.consumption": 2,
     "world.configuration.economy": { ...start["world.configuration.economy"], foodPerCitizen: 2 } };
   return {
-    schema_version: "phase-a-calibration-manifest-2.0.0", tooling_version: "phase-a-calibration-tooling-1.0.0",
+    schema_version: "phase-a-calibration-manifest-2.0.0", tooling_version: "phase-a-calibration-tooling-1.1.0",
     calibration_run_id: calibrationRunId, attempt_id: `retained-${status}-${seed}`,
     implementation_commit: implementation, implementation_tag: "v0.1.0-pilot0",
     tooling_distribution_digest: calibrationToolingDistributionDigest(), baseline_tag_commit: implementation,
@@ -220,7 +220,7 @@ test("canonical evidence carrying 21 turns fails before metric derivation", () =
     "over-horizon evidence must be rejected before metric derivation");
 });
 
-test("over-horizon evidence stops the runner before metric selection and the failure is retained", async () => {
+test("over-horizon evidence stops the runner before metric selection and retains a non-completing failed execution attempt", async () => {
   await withTempArchive(async directory => {
     const attestor = syntheticAttestationKeys();
     const runner = new PhaseACalibrationRunner({
@@ -233,66 +233,31 @@ test("over-horizon evidence stops the runner before metric selection and the fai
     assert.equal(archive.state.assessments.length, 0, "metric selection must never have run");
     assert.equal(archive.state.result_ref, null);
     assert.equal(archive.state.executions.length, 0, "over-horizon evidence is never checkpointed");
-    assert.equal(archive.state.attempts.length, 1, "the rejected attempt is still retained");
-    const manifest = await archive.manifest(archive.state.attempts[0].attempt_id);
-    assert.equal(manifest.status, CALIBRATION_FAILURES.IMPLEMENTATION_DEFECT);
-    assert.deepEqual(Object.keys(manifest.metrics), [], "a retained over-horizon failure carries no computed metrics");
+    assert.equal(archive.state.attempts.length, 0, "invalid execution is not a terminal calibration disposition");
+    assert.equal(archive.state.completed_keys.length, 0, "invalid execution cannot complete the calibration key");
+    assert.equal(archive.state.execution_attempts.length, 1, "the failed execution attempt remains canonical evidence");
+    assert.equal(archive.state.execution_attempts[0].transitions.at(-1).state, "FAILED_TERMINAL");
+    const failure = JSON.parse(readFileSync(join(directory, archive.state.execution_attempts[0].failure_record_path), "utf8"));
+    assert.equal(failure.root_cause.classification, CALIBRATION_FAILURES.IMPLEMENTATION_DEFECT);
+    assert.equal(failure.partial_canonical_evidence.status, "QUARANTINED_UNTRUSTED_ADAPTER_RESULT");
   });
 });
 
-test("accepted, rejected, failed, and incident-affected attempts are all retained with dispositions intact", async () => {
+test("only frozen terminal calibration dispositions populate completed_keys", async () => {
   await withTempArchive(async directory => {
     const attestor = syntheticAttestationKeys();
     const archive = await new CalibrationArchive(directory, attestor)
       .initialize({ protocolVersion: protocol.protocol_version, implementationCommit: implementation });
-    const dispositions = [
-      [panel[0], CALIBRATION_FAILURES.PARAMETER_FAILURE, "rejected by a frozen threshold"],
-      [panel[1], CALIBRATION_FAILURES.IMPLEMENTATION_DEFECT, "execution failed"],
-      [panel[2], CALIBRATION_FAILURES.PROTOCOL_VIOLATION, "affected by a protocol incident"]
-    ];
-    for (const [seed, status, reason] of dispositions) {
-      await archive.recordAttempt(retainedAttempt({ calibrationRunId: archive.state.calibration_run_id, seed, status, reason }),
-        { evidence: { retained: status, seed }, metrics: {} });
-    }
-
-    const adapter = syntheticAdapter();
-    const result = await new PhaseACalibrationRunner({ directory, mode: "SYNTHETIC_CONFORMANCE",
-      implementationCommit: implementation, executor: adapter.executor, attestor }).run({ maximumCandidates: 1 });
-    assert.deepEqual(new Set(result.evaluated_seeds), new Set(panel), "the accepted candidate used the complete panel");
-
-    const reopened = await CalibrationArchive.open(directory, attestor);
-    const retained = Object.fromEntries(reopened.state.attempts.map(item => [item.attempt_id, item.status]));
-    assert.equal(reopened.state.attempts.length, 27, "24 accepted seeds plus three retained non-accepted attempts");
-    for (const [seed, status] of dispositions) assert.equal(retained[`retained-${status}-${seed}`], status, `${status} disposition is intact`);
-    assert.equal(Object.values(retained).filter(status => status === CALIBRATION_FAILURES.ACCEPTED_CONFIGURATION).length, 24);
-    const manifests = await Promise.all(reopened.state.attempts.map(item => reopened.manifest(item.attempt_id)));
-    assert.ok(manifests.every(manifest => manifest !== null), "every retained attempt still has its immutable manifest");
-    for (const [seed, status, reason] of dispositions) {
-      const manifest = manifests.find(item => item.attempt_id === `retained-${status}-${seed}`);
-      assert.equal(manifest.failure_classification, status);
-      assert.equal(manifest.reason, reason);
-      assert.equal(manifest.seed, seed);
-    }
-
-    // Reporting retains what execution retained: the published result covers every attempt,
-    // not only the accepted panel.
-    assert.deepEqual([...result.all_attempt_manifest_hashes].sort(), manifests.map(sha256).sort(),
-      "the published result reports every retained attempt");
-
-    // An incident-affected attempt stays in the record and blocks any later result.
-    const incident = calibrationProtocolIncident({ disclosure: "TREATMENT_LABEL_DISCLOSED",
-      affectedDecision: `retained-${CALIBRATION_FAILURES.PROTOCOL_VIOLATION}-${panel[2]}`,
-      detectedAt: "1970-01-01T00:00:00.000Z", authority: "calibration-protocol-authority" });
-    await assert.rejects(reopened.recordIncident({ disclosure: "TREATMENT_LABEL_DISCLOSED",
-      affectedDecision: incident.affected_decision }), /completed calibration archive is immutable/);
-    assert.throws(() => buildCalibrationResult({ candidates: reopened.state.assessments, manifests,
-      protocolVersion: protocol.protocol_version, implementationCommit: implementation,
-      incidents: [incident] }), /incidents prevent result selection/);
-
-    // Re-reading the archive returns the same complete attempt set.
-    const thirdRead = await CalibrationArchive.open(directory, attestor);
-    assert.deepEqual(thirdRead.state.attempts, reopened.state.attempts);
-    assert.deepEqual(thirdRead.state.completed_keys.sort(), reopened.state.completed_keys.sort());
+    for (const status of [CALIBRATION_FAILURES.IMPLEMENTATION_DEFECT, CALIBRATION_FAILURES.PROTOCOL_VIOLATION,
+      CALIBRATION_FAILURES.INFRASTRUCTURE_FAILURE, CALIBRATION_FAILURES.BLINDING_BREACH])
+      await assert.rejects(() => archive.recordAttempt(retainedAttempt({ calibrationRunId: archive.state.calibration_run_id,
+        seed: panel[0], status, reason: "execution did not reach a terminal calibration disposition" }),
+      { evidence: {}, metrics: {} }), /valid terminal calibration disposition/);
+    const rejected = retainedAttempt({ calibrationRunId: archive.state.calibration_run_id, seed: panel[0],
+      status: CALIBRATION_FAILURES.PARAMETER_FAILURE, reason: "rejected by frozen thresholds" });
+    await archive.recordAttempt(rejected, { evidence: { retained: true }, metrics: {} });
+    assert.deepEqual(archive.state.completed_keys, [`${rejected.parameter_set_hash}:${panel[0]}`]);
+    assert.equal(archive.state.attempts.length, 1);
   });
 });
 
@@ -335,13 +300,13 @@ test("no public API drops, filters, or replaces a retained attempt", async () =>
     const archive = await new CalibrationArchive(directory, attestor)
       .initialize({ protocolVersion: protocol.protocol_version, implementationCommit: implementation });
     const runId = archive.state.calibration_run_id;
-    const failed = retainedAttempt({ calibrationRunId: runId, seed: panel[0], status: CALIBRATION_FAILURES.IMPLEMENTATION_DEFECT, reason: "execution failed" });
+    const failed = retainedAttempt({ calibrationRunId: runId, seed: panel[0], status: CALIBRATION_FAILURES.PARAMETER_FAILURE, reason: "threshold failure" });
     await archive.recordAttempt(failed, { evidence: { retained: "failed" }, metrics: {} });
     await assert.rejects(() => archive.recordAttempt({ ...failed, status: CALIBRATION_FAILURES.ACCEPTED_CONFIGURATION,
       failure_classification: CALIBRATION_FAILURES.ACCEPTED_CONFIGURATION }, { evidence: {}, metrics: {} }), /immutable|already recorded/i);
     const reopened = await CalibrationArchive.open(directory, attestor);
     assert.equal(reopened.state.attempts.length, 1);
-    assert.equal(reopened.state.attempts[0].status, CALIBRATION_FAILURES.IMPLEMENTATION_DEFECT);
+    assert.equal(reopened.state.attempts[0].status, CALIBRATION_FAILURES.PARAMETER_FAILURE);
   });
 
   // A state mutation that drops a retained attempt from the index must not survive reopening.
@@ -410,7 +375,7 @@ for (const [field, retained, rejection] of [
   ["assessments", { parameter_set_hash: "a".repeat(64) }, /retained assessments/],
   ["candidates", { parameter_set_hash: "b".repeat(64) }, /retained candidates/],
   ["incidents", { incident_type: "retained-incident" }, /retained incidents/],
-  ["execution_intents", { key: "retained-intent", attempt_id: "attempt", request: {}, request_hash: "c".repeat(64), status: "DISPATCH_PENDING" }, /retained execution intent/]
+  ["execution_intents", { key: "retained-intent", attempt_id: "attempt", request: {}, request_hash: sha256({}), status: "PENDING" }, /retained execution intent/]
 ]) test(`a later archive-signer generation cannot delete ${field}`, async () => {
   await withTempArchive(async directory => {
     const attestor = syntheticAttestationKeys();

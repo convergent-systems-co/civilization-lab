@@ -10,8 +10,18 @@ if (mode === "publish") {
   const next = structuredClone(archive.state);
   const path = `evidence/transport-${kind}.json`;
   const key = `transport-${kind}`, request = { synthetic_transport_fixture: true, kind };
-  next.execution_intents.push({ key, attempt_id: key, request, request_hash: sha256(request), status: "EVIDENCE_PERSISTED" });
-  next.executions.push({ key, attempt_id: key, path });
+  next.execution_intents.push({ key, attempt_id: key, request, request_hash: sha256(request), status: "SUCCEEDED" });
+  const executionAttemptId = `transport-execution-${kind}`;
+  next.execution_attempts.push({ execution_attempt_id: executionAttemptId, key, logical_attempt_id: key,
+    parent_execution_attempt_id: null, request_hash: sha256(request), transitions: [
+      { sequence: 0, state: "PENDING", boundary: "FIXTURE_CREATED", recorded_at: null, turn: null },
+      { sequence: 1, state: "DISPATCHING", boundary: "FIXTURE_DISPATCH", recorded_at: null, turn: null },
+      { sequence: 2, state: "RUNNING", boundary: "FIXTURE_RUNNING", recorded_at: null, turn: null },
+      { sequence: 3, state: "SUCCEEDED", boundary: "FIXTURE_ARCHIVED", recorded_at: null, turn: null }
+    ], preflight: { status: "SYNTHETIC_CONFORMANCE", authorization_hash: null, release_descriptor_hash: null },
+    failure_record_path: null, failure_record_hash: null, execution_record_path: path,
+    recovery_eligibility: "NOT_APPLICABLE", next_execution_attempt_id: null });
+  next.executions.push({ key, attempt_id: key, execution_attempt_id: executionAttemptId, path });
   // These are publication-transport fixtures, never admissible run evidence.
   await archive._exclusive(() => archive._publish(next, archive.head.digest, [{ path, value: { synthetic_transport_fixture: true, kind } }]));
 } else if (mode === "hold") {

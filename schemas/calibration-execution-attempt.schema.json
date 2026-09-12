@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilization-lab.invalid/schemas/calibration-execution-attempt.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "execution_attempt_id", "calibration_key", "logical_attempt_id", "parent_execution_attempt_id", "calibration_run_id", "parameter_set_hash", "seed", "execution_intent_id", "execution_request_hash", "protocol_hash", "tooling_version", "tooling_distribution_digest", "implementation_commit", "release_descriptor_hash", "policy_assignment_hash", "authority_endpoint_identity", "authority_observation", "preflight", "transitions", "failure_boundary", "last_successful_boundary", "partial_canonical_evidence", "evidence_head_receipts", "infrastructure_error", "root_cause", "quarantine_status", "recovery_eligibility"],
+  "properties": {
+    "schema_version": {"const": "phase-a-execution-attempt-1.0.0"},
+    "execution_attempt_id": {"type": "string", "minLength": 1},
+    "calibration_key": {"type": "string", "minLength": 1},
+    "logical_attempt_id": {"type": "string", "minLength": 1},
+    "parent_execution_attempt_id": {"type": ["string", "null"]},
+    "calibration_run_id": {"type": "string", "minLength": 1},
+    "parameter_set_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "seed": {"type": "string", "minLength": 1},
+    "execution_intent_id": {"type": "string", "minLength": 1},
+    "execution_request_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "protocol_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "tooling_version": {"const": "phase-a-calibration-tooling-1.1.0"},
+    "tooling_distribution_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "implementation_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "release_descriptor_hash": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "policy_assignment_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authority_endpoint_identity": {"type": ["string", "null"]},
+    "authority_observation": {"type": ["object", "null"]},
+    "preflight": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "authorization_hash", "release_descriptor_hash"],
+      "properties": {
+        "status": {"enum": ["PASSED_BEFORE_DISPATCH", "SYNTHETIC_CONFORMANCE"]},
+        "authorization_hash": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "release_descriptor_hash": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "transitions": {
+      "type": "array", "minItems": 2,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["sequence", "state", "boundary", "recorded_at", "turn"],
+        "properties": {
+          "sequence": {"type": "integer", "minimum": 0},
+          "state": {"enum": ["PENDING", "DISPATCHING", "RUNNING", "SUCCEEDED", "FAILED_RETRYABLE", "FAILED_TERMINAL", "QUARANTINED", "RECOVERING"]},
+          "boundary": {"type": "string", "minLength": 1},
+          "recorded_at": {"type": ["string", "null"]},
+          "turn": {"type": ["integer", "null"], "minimum": 0}
+        }
+      }
+    },
+    "failure_boundary": {"type": "string", "minLength": 1},
+    "last_successful_boundary": {"type": "string", "minLength": 1},
+    "partial_canonical_evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "event_refs"],
+      "properties": {
+        "status": {"enum": ["ABSENT_NOT_EMITTED", "QUARANTINED_UNTRUSTED_ADAPTER_RESULT"]},
+        "event_refs": {"type": "array", "items": {"type": "string"}},
+        "quarantined_adapter_result_ref": {"type": "string"},
+        "quarantined_adapter_result_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "evidence_head_receipts": {"type": "array", "items": {"type": "object"}},
+    "infrastructure_error": {
+      "type": "object", "additionalProperties": false,
+      "required": ["classification", "code", "message_digest"],
+      "properties": {
+        "classification": {"enum": ["INFRASTRUCTURE_FAILURE", "NOT_APPLICABLE"]},
+        "code": {"type": ["string", "null"]},
+        "message_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "root_cause": {
+      "type": "object", "additionalProperties": false,
+      "required": ["classification", "code", "message_digest", "detail_status", "structured_context"],
+      "properties": {
+        "classification": {"enum": ["IMPLEMENTATION_DEFECT", "PROTOCOL_VIOLATION", "BLINDING_BREACH", "INFRASTRUCTURE_FAILURE", "RESEARCH_DESIGN_BLOCKER"]},
+        "code": {"type": "string", "minLength": 1},
+        "message_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "detail_status": {"enum": ["SANITIZED_STRUCTURED_CONTEXT", "EXPLICITLY_ABSENT"]},
+        "structured_context": {"type": "object"}
+      }
+    },
+    "quarantine_status": {"enum": ["NOT_QUARANTINED", "QUARANTINED_UNCERTAIN_AUTHORITY_STATE", "RELEASED_BY_AUTHORITY_RECONCILIATION"]},
+    "recovery_eligibility": {"enum": ["NOT_APPLICABLE", "AUTHORITY_RECONCILIATION_REQUIRED", "ELIGIBLE", "TERMINAL"]}
+  }
+}

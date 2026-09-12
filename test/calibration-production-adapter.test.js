@@ -4,7 +4,8 @@ import { calibrationProtocol } from "../src/calibration.js";
 import { collectCalibrationObservations, materializeCalibrationRuntime, startingCalibrationParameterSet } from "../src/calibration-runner.js";
 import { verifyEvidenceIntegrity } from "../src/replay.js";
 import { sha256, stableId } from "../src/core.js";
-import { PHASE_A_POLICY_PACKAGE_HASH, calibrationPolicyRequestBinding } from "../src/calibration-policy.js";
+import { PHASE_A_POLICY_MANIFEST, PHASE_A_POLICY_PACKAGE_HASH, calibrationPolicyRequestBinding } from "../src/calibration-policy.js";
+import { PHASE_A_MODEL_RUNTIME_LOCK } from "../src/calibration-runtime.js";
 import { createPhaseAProductionAdapter } from "../src/calibration-production-adapter.js";
 
 const request = seed => {
@@ -97,4 +98,69 @@ test("recovery after the replay/publication boundary regenerates one byte-identi
   const comparison = structuredClone(value); comparison.adapterContractHash = sha256(fresh.contract);
   assert.deepEqual(recovered, await fresh.execute(comparison));
   assert.equal(recovered.events.filter(event => event.event_type === "RunDisposition").length, 1);
+});
+
+test("dispatch and pre-commit world fault boundaries are explicit and never publish a result", async () => {
+  for (const [stage, boundary] of [
+    ["after_dispatch_before_world_execution", "AFTER_DISPATCH_BEFORE_WORLD_EXECUTION"],
+    ["after_first_canonical_event", "AFTER_FIRST_CANONICAL_EVENT"],
+    ["during_world_execution", "DURING_WORLD_EXECUTION"]
+  ]) {
+    let injected = false;
+    const adapter = createPhaseAProductionAdapter({ executionMode: "SYNTHETIC_CONFORMANCE", fault: async point => {
+      if (!injected && point === stage) { injected = true; throw new Error(`crash:${stage}`); }
+    } });
+    const value = request(calibrationProtocol().seed_panel.seeds[4]);
+    value.adapterContractHash = sha256(adapter.contract);
+    await assert.rejects(adapter.execute(value), error => error.calibrationBoundary === boundary);
+    assert.equal(injected, true);
+  }
+});
+
+test("recovery consults authority once, retains that observation on a later failure, and does not redispatch blindly", async () => {
+  let reads = 0;
+  const observation = { body: { execution_intent_id: "placeholder", state: "ABSENT", request_hash: null }, signature: "signed-upstream" };
+  const journal = { durable: true, async get(key) { reads += 1; observation.body.execution_intent_id = key;
+    return { authority_observation: structuredClone(observation) }; }, async put() {} };
+  const adapter = createPhaseAProductionAdapter({ executionMode: "EMPIRICAL_CALIBRATION", journal,
+    evidenceAuthority: { trustDomain: "EXTERNAL_EVIDENCE_AUTHORITY", async finalize() { throw new Error("must not finalize"); } },
+    workerTimeoutMs: 5000, evidenceAuthorityTimeoutMs: 1000, fault: async stage => {
+      if (stage === "after_dispatch_before_world_execution") throw new Error("post-reconciliation outage");
+    } });
+  const value = request(calibrationProtocol().seed_panel.seeds[5]);
+  Object.assign(value, { mode: "EMPIRICAL_CALIBRATION", adapterContractHash: sha256(adapter.contract),
+    adapterPackageHash: "a".repeat(64), neutralPolicyManifest: PHASE_A_POLICY_MANIFEST,
+    modelRuntimeLock: PHASE_A_MODEL_RUNTIME_LOCK });
+  await assert.rejects(adapter.recover(value, { adapterPackageDigest: "a".repeat(64) }), error => {
+    assert.equal(error.calibrationBoundary, "AFTER_DISPATCH_BEFORE_WORLD_EXECUTION");
+    assert.equal(error.calibrationAuthorityObservation.body.state, "ABSENT"); return true;
+  });
+  assert.equal(reads, 1);
+});
+
+test("lost runner acknowledgement after authoritative finalization is retryable and returns the exact finalized result", { timeout: 120000 }, async () => {
+  let state = "ABSENT", finalized = null, injected = false;
+  const journal = { durable: true, async get(key) { return { authority_observation: { body: {
+    execution_intent_id: key, state, request_hash: state === "FINALIZED" ? sha256(value) : null,
+    result: state === "FINALIZED" ? finalized : null }, signature: "signed-upstream" } }; }, async put() {} };
+  const evidenceAuthority = { trustDomain: "EXTERNAL_EVIDENCE_AUTHORITY", async finalize(input) {
+    finalized = { bundle: input.bundle, archive_export: {}, evidence_head_receipt: {}, adapter_execution_receipt: {} };
+    state = "FINALIZED"; return structuredClone(finalized);
+  } };
+  const adapter = createPhaseAProductionAdapter({ executionMode: "EMPIRICAL_CALIBRATION", journal, evidenceAuthority,
+    workerTimeoutMs: 120000, evidenceAuthorityTimeoutMs: 15000, fault: async stage => {
+      if (!injected && stage === "after_authority_finalize") { injected = true; throw new Error("runner response lost"); }
+    } });
+  const value = request(calibrationProtocol().seed_panel.seeds[6]);
+  Object.assign(value, { mode: "EMPIRICAL_CALIBRATION", adapterContractHash: sha256(adapter.contract),
+    adapterPackageHash: "b".repeat(64), neutralPolicyManifest: PHASE_A_POLICY_MANIFEST,
+    modelRuntimeLock: PHASE_A_MODEL_RUNTIME_LOCK });
+  await assert.rejects(adapter.execute(value, { adapterPackageDigest: "b".repeat(64) }), error => {
+    assert.equal(error.code, "CALIBRATION_INFRASTRUCTURE_AUTHORITY");
+    assert.equal(error.calibrationBoundary, "AFTER_AUTHORITY_FINALIZE_BEFORE_RUNNER_ACK");
+    assert.deepEqual(error.calibrationRawResult, finalized);
+    assert.equal(error.calibrationEvidenceHeadReceipts.length, 2);
+    return true;
+  });
+  assert.deepEqual(await adapter.recover(structuredClone(value), { adapterPackageDigest: "b".repeat(64) }), finalized);
 });

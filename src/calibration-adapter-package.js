@@ -45,7 +45,7 @@ async function treeFiles(root, directory) {
 /** Build a closed package for scripts/calibration-adapter-worker.js. The caller
  * signs the returned declaration; no empirical authority is created here. */
 export async function buildPhaseAAdapterPackage({ repositoryRoot, destination, evidenceAuthorityEndpoint,
-  evidenceAuthorityCaCertificate = null,
+  evidenceAuthorityCaCertificate = null, evidenceHeadPublicKey = null,
   workerTimeoutMs = 120_000, evidenceAuthorityTimeoutMs = 15_000,
   allowInsecureLoopbackForConformance = false }) {
   const root = resolve(repositoryRoot), target = resolve(destination);
@@ -77,10 +77,14 @@ export async function buildPhaseAAdapterPackage({ repositoryRoot, destination, e
     files.add(caResource);
     caHash = digest(caBytes);
   }
+  const observationKey = evidenceHeadPublicKey === null ? null
+    : String(evidenceHeadPublicKey).includes('BEGIN PUBLIC KEY') ? String(evidenceHeadPublicKey)
+      : await readFile(resolve(evidenceHeadPublicKey), 'utf8');
   await writeFile(resolve(target, authorityResource), JSON.stringify({ version: 'phase-a-evidence-authority-client-1.1.0',
     request_version: 'phase-a-evidence-authority-request-1.1.0', endpoint: endpoint.href,
     request_timeout_ms: evidenceAuthorityTimeoutMs, worker_timeout_ms: workerTimeoutMs,
     transport: conformanceLoopback ? 'INSECURE_LOOPBACK_CONFORMANCE_ONLY' : 'HTTPS_PRODUCTION',
+    ...(observationKey === null ? {} : { observation_public_key: observationKey }),
     ...(conformanceLoopback ? {} : { tls_ca_resource: caResource, tls_ca_sha256: caHash }) }) + '\n', { mode: 0o600 });
   files.add(authorityResource);
   const wrapper = "export { calibrationAdapter } from './src/calibration-production-entrypoint.js';\n";

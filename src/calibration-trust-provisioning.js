@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { chmod, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { resolve, relative, isAbsolute, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { assert, canonicalize, sha256 } from './core.js';
+import { assert, canonicalize, clone, sha256 } from './core.js';
 import { assertValidSchema } from './schema.js';
 import { calibrationProtocol } from './calibration.js';
 import { parameterRegistry } from './parameters.js';
@@ -264,6 +264,7 @@ export async function createCalibrationDeploymentArtifacts({
   protocolPreparationCommit,
   calibrationToolingCommit,
   calibrationToolingImplementationCommit,
+  predecessorFailedCampaign = null,
   issuedAt = new Date().toISOString()
 }) {
   assert(realpathSync(resolve(repositoryRoot)) === realpathSync(resolve(import.meta.dirname, '..')),
@@ -279,6 +280,12 @@ export async function createCalibrationDeploymentArtifacts({
   assert(Number.isSafeInteger(notBeforeMs) && Number.isSafeInteger(expiresAtMs) && expiresAtMs > notBeforeMs, 'authorization validity interval is invalid');
   assert(typeof campaignId === 'string' && campaignId.length > 0 && typeof calibrationRunId === 'string' && calibrationRunId.length > 0,
     'campaign and calibration run identifiers are required');
+  if (predecessorFailedCampaign !== null) assert(predecessorFailedCampaign.reference_type === 'PREDECESSOR_FAILED_CAMPAIGN' &&
+    predecessorFailedCampaign.disposition === 'FAILED_PRE_CALIBRATION_EXECUTION' &&
+    predecessorFailedCampaign.parameter_vectors_successfully_evaluated === 0 &&
+    predecessorFailedCampaign.calibration_seeds_completed === 0 &&
+    canonicalize(predecessorFailedCampaign.imported_completed_keys) === '[]',
+  'replacement campaign predecessor reference is malformed or imports failed results');
   const endpoint = new URL(evidenceEndpoint);
   assert(endpoint.protocol === 'https:' && endpoint.username === '' && endpoint.password === '' && endpoint.hash === '', 'evidence authority requires an exact credential-free HTTPS endpoint');
   const serverCertificate = new X509Certificate(await readFile(provisioned.tls.server_certificate_path));
@@ -367,6 +374,7 @@ export async function createCalibrationDeploymentArtifacts({
     archive_destination_hash: sha256(archive),
     campaign_id: campaignId,
     calibration_run_id: calibrationRunId,
+    ...(predecessorFailedCampaign === null ? {} : { predecessor_failed_campaign: clone(predecessorFailedCampaign) }),
     adapter_executable: adapterDeclaration
   };
   const authorizationCapability = signArtifact(capabilityBody, provisioned.authorities.calibration_authorization);
