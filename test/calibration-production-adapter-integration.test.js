@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPublicKey, generateKeyPairSync, sign } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -44,8 +44,12 @@ test('repository Phase A adapter package loads through signed isolated-worker au
   const temporary = await mkdtemp(join(tmpdir(), 'phase-a-production-package-'));
   const packageRoot = join(temporary, 'package');
   try {
+    const caKey = join(temporary, 'ca-key.pem'), caCertificate = join(temporary, 'ca-cert.pem');
+    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', caKey, '-out', caCertificate,
+      '-subj', '/CN=CivilizationLab Test CA', '-days', '1'], { stdio: 'ignore' });
     const declaration = await buildPhaseAAdapterPackage({ repositoryRoot: root, destination: packageRoot,
-      evidenceAuthorityEndpoint: 'https://evidence-authority.invalid/v1/seal' });
+      evidenceAuthorityEndpoint: 'https://evidence-authority.invalid/v1/seal',
+      evidenceAuthorityCaCertificate: caCertificate });
     assert.deepEqual(declaration.permissions.network, ['evidence-authority.invalid']);
     assert.deepEqual(declaration.permissions.environment, ['CIVLAB_CALIBRATION_EVIDENCE_AUTH_TOKEN']);
     assert.equal(JSON.stringify(declaration).includes('PRIVATE_KEY'), false);

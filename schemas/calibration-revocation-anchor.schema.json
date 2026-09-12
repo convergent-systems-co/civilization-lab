@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration-revocation-anchor.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "authority_id", "evidence_head_key_id", "generation", "registry_hash", "revoked_key_ids", "revoked_capability_hashes"],
+  "properties": {
+    "version": {"const": "phase-a-revocation-anchor-1.0.0"},
+    "authority_id": {"type": "string", "minLength": 3},
+    "evidence_head_key_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "generation": {"type": "integer", "minimum": 0},
+    "registry_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "revoked_key_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+    "revoked_capability_hashes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+  }
+}

@@ -45,6 +45,7 @@ async function treeFiles(root, directory) {
 /** Build a closed package for scripts/calibration-adapter-worker.js. The caller
  * signs the returned declaration; no empirical authority is created here. */
 export async function buildPhaseAAdapterPackage({ repositoryRoot, destination, evidenceAuthorityEndpoint,
+  evidenceAuthorityCaCertificate = null,
   workerTimeoutMs = 120_000, evidenceAuthorityTimeoutMs = 15_000,
   allowInsecureLoopbackForConformance = false }) {
   const root = resolve(repositoryRoot), target = resolve(destination);
@@ -53,6 +54,8 @@ export async function buildPhaseAAdapterPackage({ repositoryRoot, destination, e
     ['127.0.0.1', '::1', 'localhost'].includes(endpoint.hostname);
   assert((endpoint.protocol === 'https:' || conformanceLoopback) && endpoint.username === '' && endpoint.password === '' && !endpoint.hash,
     'production adapter requires an exact credential-free HTTPS evidence-authority endpoint');
+  if (!conformanceLoopback) assert(evidenceAuthorityCaCertificate,
+    'production adapter requires the campaign CA certificate for pinned HTTPS');
   await mkdir(target, { recursive: false, mode: 0o700 });
   const files = new Set([...await sourceGraph(root), ...RESOURCE_FILES,
     ...await treeFiles(root, 'config'), ...await treeFiles(root, 'schemas')]);
@@ -62,13 +65,23 @@ export async function buildPhaseAAdapterPackage({ repositoryRoot, destination, e
     await cp(resolve(root, name), output);
   }
   const authorityResource = 'config/calibration-evidence-authority.json';
+  const caResource = 'config/calibration-evidence-authority-ca.pem';
   assert(Number.isSafeInteger(workerTimeoutMs) && workerTimeoutMs > 0 && workerTimeoutMs <= 300_000 &&
     Number.isSafeInteger(evidenceAuthorityTimeoutMs) && evidenceAuthorityTimeoutMs > 0 && evidenceAuthorityTimeoutMs <= 300_000,
   'adapter deadlines must be explicit bounded integers');
+  let caHash = null;
+  if (!conformanceLoopback) {
+    const caBytes = await readFile(resolve(evidenceAuthorityCaCertificate));
+    assert(caBytes.includes(Buffer.from('BEGIN CERTIFICATE')), 'campaign CA certificate is malformed');
+    await writeFile(resolve(target, caResource), caBytes, { mode: 0o600 });
+    files.add(caResource);
+    caHash = digest(caBytes);
+  }
   await writeFile(resolve(target, authorityResource), JSON.stringify({ version: 'phase-a-evidence-authority-client-1.1.0',
     request_version: 'phase-a-evidence-authority-request-1.1.0', endpoint: endpoint.href,
     request_timeout_ms: evidenceAuthorityTimeoutMs, worker_timeout_ms: workerTimeoutMs,
-    transport: conformanceLoopback ? 'INSECURE_LOOPBACK_CONFORMANCE_ONLY' : 'HTTPS_PRODUCTION' }) + '\n', { mode: 0o600 });
+    transport: conformanceLoopback ? 'INSECURE_LOOPBACK_CONFORMANCE_ONLY' : 'HTTPS_PRODUCTION',
+    ...(conformanceLoopback ? {} : { tls_ca_resource: caResource, tls_ca_sha256: caHash }) }) + '\n', { mode: 0o600 });
   files.add(authorityResource);
   const wrapper = "export { calibrationAdapter } from './src/calibration-production-entrypoint.js';\n";
   await writeFile(resolve(target, 'adapter.mjs'), wrapper, { mode: 0o600 });

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration-evidence-authority-runtime.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "authority_id", "service_version", "endpoint", "transport", "tls_ca_sha256", "tls_server_certificate_sha256", "evidence_key_id", "evidence_head_key_id", "storage_class", "credential_scheme", "deployment_id", "public_key", "signature"],
+  "properties": {
+    "version": {"const": "phase-a-evidence-authority-runtime-1.0.0"},
+    "authority_id": {"type": "string", "minLength": 3},
+    "service_version": {"const": "phase-a-production-evidence-authority-1.0.0"},
+    "endpoint": {"type": "string", "pattern": "^https://"},
+    "transport": {"const": "HTTPS_PRODUCTION_EQUIVALENT_LOCAL"},
+    "tls_ca_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "tls_server_certificate_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "evidence_key_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "evidence_head_key_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "storage_class": {"const": "OWNER_ONLY_DURABLE_EXTERNAL_ARCHIVE"},
+    "credential_scheme": {"const": "BEARER_256_BIT_EXTERNAL_SECRET"},
+    "deployment_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "public_key": {"type": "string", "minLength": 80},
+    "signature": {"type": "string", "minLength": 80}
+  }
+}

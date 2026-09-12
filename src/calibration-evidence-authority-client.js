@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { request as httpsRequest } from 'node:https';
 import { assert, canonicalize, clone, sha256 } from './core.js';
 import { CalibrationExecutionError, authorityAuthorization, authorityProtocol,
   infrastructureAuthority, infrastructureDeadline } from './calibration-errors.js';
@@ -15,11 +17,50 @@ export function validateEvidenceAuthorityConfiguration(configuration) {
     ['127.0.0.1', '::1', 'localhost'].includes(endpoint.hostname);
   assert(transportValid && endpoint.username === '' && endpoint.password === '' && !endpoint.hash,
     'invalid signed evidence-authority endpoint');
+  if (configuration.tls_ca_resource !== undefined || configuration.tls_ca_sha256 !== undefined) {
+    assert(configuration.transport === 'HTTPS_PRODUCTION' &&
+      typeof configuration.tls_ca_resource === 'string' && /^config\/[A-Za-z0-9._-]+\.pem$/.test(configuration.tls_ca_resource) &&
+      typeof configuration.tls_ca_sha256 === 'string' && /^[a-f0-9]{64}$/.test(configuration.tls_ca_sha256),
+    'invalid signed evidence-authority CA pin');
+  }
   return Object.freeze({ ...clone(configuration), host: endpoint.host });
 }
 
-export function createEvidenceAuthorityClient({ configuration, credential, fetchImplementation = globalThis.fetch }) {
+function pinnedHttpsFetch(certificateAuthority) {
+  assert(certificateAuthority, 'signed evidence-authority CA certificate unavailable');
+  return (url, options) => new Promise((resolve, reject) => {
+    const endpoint = new URL(url);
+    const request = httpsRequest(endpoint, {
+      method: options.method,
+      ca: certificateAuthority,
+      headers: options.headers,
+      signal: options.signal
+    }, response => {
+      const chunks = [];
+      response.on('data', chunk => chunks.push(chunk));
+      response.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8');
+        resolve({ ok: response.statusCode >= 200 && response.statusCode < 300,
+          status: response.statusCode,
+          async json() { return JSON.parse(body); } });
+      });
+    });
+    request.once('error', reject);
+    request.end(options.body);
+  });
+}
+
+export function createEvidenceAuthorityClient({ configuration, credential, fetchImplementation = null,
+  certificateAuthority = null }) {
   const locked = validateEvidenceAuthorityConfiguration(configuration);
+  if (locked.transport === 'HTTPS_PRODUCTION' && fetchImplementation === null) {
+    assert(locked.tls_ca_sha256 && certificateAuthority &&
+      createHash('sha256').update(certificateAuthority).digest('hex') === locked.tls_ca_sha256,
+      'signed evidence-authority CA certificate digest mismatch');
+    fetchImplementation = pinnedHttpsFetch(certificateAuthority);
+  }
+  if (locked.transport === 'INSECURE_LOOPBACK_CONFORMANCE_ONLY' && fetchImplementation === null)
+    fetchImplementation = globalThis.fetch;
   assert(typeof fetchImplementation === 'function', 'evidence authority fetch implementation unavailable');
   const token = typeof credential === 'function' ? credential : () => credential;
   async function request(operation, input) {

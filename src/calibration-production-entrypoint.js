@@ -4,13 +4,15 @@ import { createEvidenceAuthorityClient, validateEvidenceAuthorityConfiguration }
 
 const authorityConfiguration = JSON.parse(readFileSync(new URL('../config/calibration-evidence-authority.json', import.meta.url), 'utf8'));
 validateEvidenceAuthorityConfiguration(authorityConfiguration);
+const certificateAuthority = authorityConfiguration.transport === 'HTTPS_PRODUCTION'
+  ? readFileSync(new URL(`../${authorityConfiguration.tls_ca_resource}`, import.meta.url)) : null;
 
 // The adapter holds no evidence or head signing key. It can submit exactly one
 // idempotent intent-bound request to the HTTPS authority baked into the signed
 // package. Parent-side signature verification is the authority boundary; output
 // credential scanning is defense in depth only.
 const client = createEvidenceAuthorityClient({ configuration: authorityConfiguration,
-  credential: () => process.env.CIVLAB_CALIBRATION_EVIDENCE_AUTH_TOKEN });
+  credential: () => process.env.CIVLAB_CALIBRATION_EVIDENCE_AUTH_TOKEN, certificateAuthority });
 const evidenceAuthority = Object.freeze({ trustDomain: 'EXTERNAL_EVIDENCE_AUTHORITY',
   finalize: input => client.finalize(input) });
 const executionJournal = Object.freeze({

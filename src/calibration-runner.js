@@ -46,6 +46,8 @@ const HASH = /^[a-f0-9]{64}$/;
 const TOOLING_DISTRIBUTION_FILES = Object.freeze([
   "../src/calibration.js", "../src/calibration-metrics.js", "../src/calibration-runner.js",
   "../scripts/calibration-cli.js", "../scripts/calibration-selector.js", "../scripts/calibration-adapter-worker.js",
+  "../scripts/calibration-trust-provision.js", "../scripts/calibration-evidence-authority.js",
+  "../scripts/calibration-trust-preflight.js",
   "../PILOT_0_CALIBRATION_PROTOCOL.spec.json", "../PARAMETER_REGISTRY.spec.json",
   "../schemas/calibration-attestation.schema.json", "../schemas/calibration-execution-manifest.schema.json",
   "../schemas/calibration-metric-artifact.schema.json", "../schemas/calibration-result.schema.json",
@@ -92,6 +94,7 @@ function releaseDescriptorBody(descriptor) {
 }
 
 export function assertCalibrationReleaseTrust(descriptor, pinnedPublicKey, trustPolicy = deploymentTrustPolicy) {
+  if (descriptor?.issued_at !== undefined) assertValidSchema(descriptor, "calibration-deployment-release.schema.json");
   assert(descriptor?.public_key && descriptor?.signature && pinnedPublicKey, "externally pinned calibration release trust required");
   const embedded = createPublicKey(descriptor.public_key), pinned = createPublicKey(pinnedPublicKey);
   assert(calibrationKeyId(embedded) === calibrationKeyId(pinned), "calibration release descriptor is not signed by pinned release trust");
@@ -192,6 +195,50 @@ function authorizationBody(capability) {
   return body;
 }
 
+export function inspectCalibrationRevocationStatus(capability, registry, pinnedAuthorizationTrust, releaseKeyId = null) {
+  const authorization = authorizationBody(capability);
+  if (authorization.revocation === undefined) return Object.freeze({ required: false, revoked: false });
+  assertValidSchema(capability, "calibration-deployment-capability.schema.json");
+  assertValidSchema(registry, "calibration-deployment-revocations.schema.json");
+  assert(registry?.public_key && registry?.signature && pinnedAuthorizationTrust,
+    "signed calibration revocation registry required at dispatch");
+  const pinned = pinnedAuthorizationTrust?.type === "public" ? pinnedAuthorizationTrust : createPublicKey(pinnedAuthorizationTrust);
+  const embedded = createPublicKey(registry.public_key);
+  assert(calibrationKeyId(embedded) === calibrationKeyId(pinned) &&
+    registry.authority_key_id === calibrationKeyId(pinned), "calibration revocation registry authority mismatch");
+  const body = clone(registry); delete body.public_key; delete body.signature;
+  assert(body.version === "phase-a-revocation-registry-1.0.0" &&
+    Number.isSafeInteger(body.generation) && body.generation >= 0 &&
+    (body.parent_registry_hash === null || HASH.test(body.parent_registry_hash)) && Array.isArray(body.ancestor_registry_hashes) &&
+    Array.isArray(body.revoked_key_ids) && Array.isArray(body.revoked_capability_hashes),
+  "calibration revocation registry malformed");
+  const registryHash = sha256(registry), issuanceHash = authorization.revocation.registry_hash;
+  assert(Number.isFinite(Date.parse(body.generated_at)) && Date.parse(body.generated_at) >= Date.parse(authorization.issued_at),
+    "calibration revocation registry predates authorization issuance");
+  assert((registryHash === issuanceHash && body.generation === 0 ||
+    body.generation > 0 && body.ancestor_registry_hashes.includes(issuanceHash)) &&
+    authorization.revocation.registry_ref === "calibration-revocations.json" &&
+    authorization.revocation.checked_at_dispatch === true,
+  "calibration revocation registry binding mismatch");
+  assert(body.generation === 0 ? body.parent_registry_hash === null && body.ancestor_registry_hashes.length === 0 :
+    HASH.test(body.parent_registry_hash) && body.ancestor_registry_hashes.includes(body.parent_registry_hash),
+  "calibration revocation registry lineage malformed");
+  assert(verify(null, Buffer.from(canonicalize(body)), pinned, Buffer.from(registry.signature, "base64")),
+    "calibration revocation registry signature invalid");
+  const revoked = body.revoked_key_ids.includes(authorization.key_id) ||
+    (releaseKeyId !== null && body.revoked_key_ids.includes(releaseKeyId)) ||
+    body.revoked_capability_hashes.includes(sha256(capability));
+  return Object.freeze({ required: true, revoked, registry_hash: registryHash, generation: body.generation,
+    parent_registry_hash: body.parent_registry_hash, revoked_key_ids: Object.freeze([...body.revoked_key_ids]),
+    revoked_capability_hashes: Object.freeze([...body.revoked_capability_hashes]) });
+}
+
+export function assertCalibrationRevocationStatus(capability, registry, pinnedAuthorizationTrust, releaseKeyId = null) {
+  const status = inspectCalibrationRevocationStatus(capability, registry, pinnedAuthorizationTrust, releaseKeyId);
+  assert(!status.revoked, "calibration authorization or release has been revoked");
+  return true;
+}
+
 function assertNeutralPolicyManifest(manifest, modelUseDeclared) {
   const keys = ["action_contract_hash", "calibration_objectives_exposed", "context_contract_hash", "model_use_declared", "persistence_history_access", "policy_class", "policy_id", "policy_package_hash", "policy_package_id", "policy_package_version", "treatment_allocation", "treatment_labels_exposed", "treatment_neutral", "version"];
   assert(manifest && canonicalize(Object.keys(manifest).sort()) === canonicalize(keys.sort()),
@@ -221,9 +268,9 @@ export function assertNeutralReplayCondition(condition, policyId) {
   return condition;
 }
 
-function assertEmpiricalCapability(capability, {
+export function assertEmpiricalCapability(capability, {
   archiveDirectory = null, now = Date.now(), authorizationTrust = null, releaseDescriptor = null, releaseTrust = null,
-  trustPolicy = deploymentTrustPolicy
+  trustPolicy = deploymentTrustPolicy, revocationRegistry = null
 } = {}) {
   assert(capability?.public_key && capability?.signature, "empirical calibration requires a separately signed external authorization capability");
   const publicKey = createPublicKey(capability.public_key), body = authorizationBody(capability);
@@ -242,6 +289,13 @@ function assertEmpiricalCapability(capability, {
   assert(body.deployment_trust_policy_hash === trustPolicyHash, "empirical authorization deployment trust-policy mismatch");
   assert(body.execution_scope === "PHASE_A_WORLD_CALIBRATION" && body.seed_panel_hash === sha256(protocol.seed_panel.seeds) && body.max_turns === 20,
     "empirical authorization scope/seed/horizon mismatch");
+  if (body.revocation !== undefined) {
+    assert(body.parameter_domain_hash === sha256(protocol.parameter_domains) &&
+      canonicalize([...body.prohibited_scopes].sort()) === canonicalize([
+        "PILOT_0_RESEARCH", "QWEN_ECOLOGICAL_VALIDATION", "HUMAN_SESSIONS", "PERSISTENCE_TREATMENT_ANALYSIS",
+        "CONFIRMATORY_RESEARCH", "ORGANIZATION_MECHANICS", "STATISTICAL_FREEZE_112"].sort()),
+    "empirical authorization parameter domain or prohibited scope mismatch");
+  }
   assert(body.model_runtime_lock_hash === CALIBRATION_MODEL_RUNTIME_LOCK_HASH, "empirical authorization model-runtime lock mismatch");
   assertNeutralPolicyManifest(body.policy_manifest, body.policy_manifest?.model_use_declared);
   assert(body.policy_manifest_hash === sha256(body.policy_manifest), "empirical authorization policy-manifest hash mismatch");
@@ -260,6 +314,7 @@ function assertEmpiricalCapability(capability, {
   assert(release.approved_adapter_package_digest === sha256(body.adapter_executable),
     "empirical authorization adapter package differs from release-approved digest");
   assert(verify(null, Buffer.from(canonicalize(body)), publicKey, Buffer.from(capability.signature, "base64")), "empirical authorization signature invalid");
+  assertCalibrationRevocationStatus(capability, revocationRegistry, pinnedAuthorization, release.release_key_id);
   return release;
 }
 
@@ -400,7 +455,16 @@ function signedEvidenceAuthorityConfiguration(modulePath, declaration) {
   const configuration = JSON.parse(readFileSync(path, "utf8"));
   assert(createHash("sha256").update(readFileSync(path)).digest("hex") === declaration.files[resource],
     "signed evidence-authority configuration digest mismatch");
-  return validateEvidenceAuthorityConfiguration(configuration);
+  const validated = validateEvidenceAuthorityConfiguration(configuration);
+  if (validated.transport === "HTTPS_PRODUCTION") {
+    assert(typeof validated.tls_ca_resource === "string" && Object.hasOwn(declaration.files, validated.tls_ca_resource),
+      "signed evidence-authority CA certificate is absent from adapter package");
+    const caPath = resolve(dirname(modulePath), validated.tls_ca_resource);
+    const caDigest = createHash("sha256").update(readFileSync(caPath)).digest("hex");
+    assert(caDigest === validated.tls_ca_sha256 && caDigest === declaration.files[validated.tls_ca_resource],
+      "signed evidence-authority CA certificate digest mismatch");
+  }
+  return validated;
 }
 
 function assertNoModelAdapterPermissions(modulePath, declaration, contract = null) {
@@ -525,7 +589,11 @@ export function assertEmpiricalCalibrationAuthorization(capability, adapter, opt
   const loaded = loadedExecutionModules.get(adapter);
   assert(loaded && loaded.execute === adapter.execute && canonicalize(loaded.declaration) === canonicalize(body.adapter_executable), "production adapter executable was not loaded through authorized source verification");
   executableBytes(loaded.path, loaded.declaration);
-  if (adapter.contract.model_use_declared === false) assertNoModelAdapterPermissions(loaded.path, loaded.declaration, adapter.contract);
+  if (adapter.contract.model_use_declared === false) {
+    const authorityConfiguration = assertNoModelAdapterPermissions(loaded.path, loaded.declaration, adapter.contract);
+    if (body.evidence_endpoint !== undefined) assert(body.evidence_endpoint === authorityConfiguration.endpoint,
+      "signed capability and adapter evidence endpoints differ");
+  }
   assert(adapter.contract.execute_sha256 === loaded.executeSourceHash, "loaded adapter execute export differs from pinned executable identity");
   assert(adapter.contract.mode === "EMPIRICAL_CALIBRATION" && adapter.contract.treatment_neutral === true && typeof adapter.contract.model_use_declared === "boolean" &&
     adapter.contract.seed_panel_hash === sha256(protocol.seed_panel.seeds) && adapter.contract.max_turns === 20 &&
@@ -1974,12 +2042,13 @@ export function buildCalibrationResult({ candidates, manifests, protocolVersion,
 export class PhaseACalibrationRunner {
   constructor({ directory, mode, implementationCommit, executor, attestor = null, archiveSigner = null, authorization = null,
     authorizationTrust = null, releaseDescriptor = null, releaseTrust = null, trustPolicy = deploymentTrustPolicy,
-    evidencePublicKey = null, evidenceHeadPublicKey = null, codingTrust = null, fault = () => {} }) {
+    revocationRegistry = null, evidencePublicKey = null, evidenceHeadPublicKey = null, codingTrust = null, fault = () => {} }) {
     assert(typeof executor === "function" || typeof executor?.execute === "function", "calibration executor required");
     this.directory = directory; this.mode = mode; this.implementationCommit = implementationCommit; this.executor = executor; this.attestor = attestor;
     this.archiveSigner = archiveSigner;
     this.authorization = authorization; this.authorizationTrust = authorizationTrust; this.releaseDescriptor = releaseDescriptor;
-    this.releaseTrust = releaseTrust; this.trustPolicy = clone(trustPolicy); this.fault = fault;
+    this.releaseTrust = releaseTrust; this.trustPolicy = clone(trustPolicy);
+    this.revocationRegistry = revocationRegistry === null ? null : clone(revocationRegistry); this.fault = fault;
     this.evidencePublicKey = evidencePublicKey; this.evidenceHeadPublicKey = evidenceHeadPublicKey; this.codingTrust = codingTrust;
   }
   async run({ maximumCandidates = protocol.search_procedure.maximum_parameter_sets } = {}) {
@@ -1987,7 +2056,7 @@ export class PhaseACalibrationRunner {
     assert(["SYNTHETIC_CONFORMANCE", "EMPIRICAL_CALIBRATION"].includes(this.mode), "unsupported calibration mode");
     if (this.mode === "EMPIRICAL_CALIBRATION") assertEmpiricalCalibrationAuthorization(this.authorization, this.executor, {
       archiveDirectory: this.directory, authorizationTrust: this.authorizationTrust, releaseDescriptor: this.releaseDescriptor,
-      releaseTrust: this.releaseTrust, trustPolicy: this.trustPolicy
+      releaseTrust: this.releaseTrust, trustPolicy: this.trustPolicy, revocationRegistry: this.revocationRegistry
     });
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
     const lease = new DatabaseSync(join(this.directory, "calibration-execution-lock.sqlite"));
@@ -2002,7 +2071,7 @@ export class PhaseACalibrationRunner {
     const verifiedRelease = this.mode === "EMPIRICAL_CALIBRATION"
       ? assertEmpiricalCalibrationAuthorization(this.authorization, this.executor, { archiveDirectory: this.directory,
         authorizationTrust: this.authorizationTrust, releaseDescriptor: this.releaseDescriptor, releaseTrust: this.releaseTrust,
-        trustPolicy: this.trustPolicy })
+        trustPolicy: this.trustPolicy, revocationRegistry: this.revocationRegistry })
       : null;
     if (this.mode === "EMPIRICAL_CALIBRATION") assert(maximumCandidates === protocol.search_procedure.maximum_parameter_sets, "empirical search bound cannot be manually overridden");
     assert(this.implementationCommit === BASELINE_COMMIT, "implementation baseline mismatch");
@@ -2186,7 +2255,8 @@ export class PhaseACalibrationRunner {
         try {
           if (this.mode === "EMPIRICAL_CALIBRATION") assertEmpiricalCapability(this.authorization, {
             archiveDirectory: this.directory, authorizationTrust: this.authorizationTrust,
-            releaseDescriptor: this.releaseDescriptor, releaseTrust: this.releaseTrust, trustPolicy: this.trustPolicy, now: Date.now()
+            releaseDescriptor: this.releaseDescriptor, releaseTrust: this.releaseTrust, trustPolicy: this.trustPolicy,
+            revocationRegistry: this.revocationRegistry, now: Date.now()
           });
           const execute = pendingIntent && typeof this.executor?.recover === "function"
             ? this.executor.recover.bind(this.executor)
@@ -2194,7 +2264,8 @@ export class PhaseACalibrationRunner {
           assert(execute, "empirical adapter cannot recover a durable execution intent after restart");
           if (this.mode === "EMPIRICAL_CALIBRATION") assertEmpiricalCalibrationAuthorization(this.authorization, this.executor, {
             archiveDirectory: this.directory, authorizationTrust: this.authorizationTrust, releaseDescriptor: this.releaseDescriptor,
-            releaseTrust: this.releaseTrust, trustPolicy: this.trustPolicy, now: Date.now()
+            releaseTrust: this.releaseTrust, trustPolicy: this.trustPolicy,
+            revocationRegistry: this.revocationRegistry, now: Date.now()
           });
           const execution = await execute(executionRequest); returnedExecution = clone(execution);
           const packageDigest = loadedExecutionModules.get(this.executor)?.lastPackageDigest ?? null;

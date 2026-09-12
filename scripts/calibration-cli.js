@@ -107,10 +107,11 @@ try {
       const authorizationPath = option("--authorization"), authorizationPublicPath = option("--authorization-public-key"),
         releasePath = option("--release-descriptor"), releasePublicPath = option("--release-public-key"),
         adapterPath = option("--adapter-module"), evidencePublicPath = option("--evidence-public-key"),
-        evidenceHeadPublicPath = option("--evidence-head-public-key");
-      if (!authorizationPath || !authorizationPublicPath || !releasePath || !releasePublicPath || !adapterPath || !evidencePublicPath || !evidenceHeadPublicPath)
+        evidenceHeadPublicPath = option("--evidence-head-public-key"), revocationsPath = option("--revocations");
+      if (!authorizationPath || !authorizationPublicPath || !releasePath || !releasePublicPath || !adapterPath || !evidencePublicPath || !evidenceHeadPublicPath || !revocationsPath)
         throw new Error("empirical verify requires signed authorization/release, authorized adapter, and independent evidence/evidence-head trust");
       const authorization = JSON.parse(await readFile(resolve(authorizationPath), "utf8"));
+      const revocationRegistry = JSON.parse(await readFile(resolve(revocationsPath), "utf8"));
       const releaseDescriptor = JSON.parse(await readFile(resolve(releasePath), "utf8"));
       const authorizationPublicKey = createPublicKey(await readFile(resolve(authorizationPublicPath), "utf8"));
       const releaseTrust = await readFile(resolve(releasePublicPath), "utf8");
@@ -118,7 +119,8 @@ try {
       const archiveDirectory = assertSecureCalibrationArchiveDirectory(directory);
       const evidencePublicKey = await readFile(resolve(evidencePublicPath), "utf8"), headPublicKey = await readFile(resolve(evidenceHeadPublicPath), "utf8");
       await loadCalibrationExecutionModule(adapterPath, authorization, { archiveDirectory,
-        authorizationTrust: authorizationPublicKey.export({ type: "spki", format: "pem" }), releaseDescriptor, releaseTrust, trustPolicy });
+        authorizationTrust: authorizationPublicKey.export({ type: "spki", format: "pem" }), releaseDescriptor, releaseTrust,
+        trustPolicy, revocationRegistry });
       const releaseBinding = assertCalibrationReleaseTrust(releaseDescriptor, releaseTrust, trustPolicy);
       if (keyId !== authorization.archive_key_id || attestorKeyId !== authorization.attestor_key_id ||
         calibrationKeyId(createPublicKey(evidencePublicKey)) !== authorization.evidence_key_id ||
@@ -150,14 +152,16 @@ try {
   const authorizationPath = option("--authorization"), authorizationPublicKeyPath = option("--authorization-public-key");
   const adapterPath = option("--adapter-module"), directory = option("--archive");
   const releasePath = option("--release-descriptor"), releasePublicPath = option("--release-public-key");
+  const revocationsPath = option("--revocations");
   const attestorPrivatePath = option("--attestor-private-key"), attestorPublicPath = option("--attestor-public-key");
   const archivePrivatePath = option("--archive-private-key"), archivePublicPath = option("--archive-public-key");
   const evidencePublicPath = option("--evidence-public-key"), evidenceHeadPublicPath = option("--evidence-head-public-key");
   if (!authorizationPath || !authorizationPublicKeyPath || !adapterPath || !directory || !attestorPrivatePath || !attestorPublicPath ||
-    !archivePrivatePath || !archivePublicPath || !releasePath || !releasePublicPath)
-    throw new Error("empirical calibration is not authorized without authorization, release, adapter, archive destination, independent archive-signer keys, and attestor keys");
+    !archivePrivatePath || !archivePublicPath || !releasePath || !releasePublicPath || !revocationsPath)
+    throw new Error("empirical calibration is not authorized without authorization, release, revocation registry, adapter, archive destination, independent archive-signer keys, and attestor keys");
   const authorization = JSON.parse(await readFile(resolve(authorizationPath), "utf8"));
   const releaseDescriptor = JSON.parse(await readFile(resolve(releasePath), "utf8"));
+  const revocationRegistry = JSON.parse(await readFile(resolve(revocationsPath), "utf8"));
   const releaseTrust = await readFile(resolve(releasePublicPath), "utf8");
   const authorizationPublicKey = createPublicKey(await readFile(resolve(authorizationPublicKeyPath), "utf8"));
   const releasePublicKey = createPublicKey(releaseTrust);
@@ -167,7 +171,8 @@ try {
   if (calibrationKeyId(embedded) !== calibrationKeyId(authorizationPublicKey)) throw new Error("authorization capability is not bound to the external authorization trust root");
   if (!evidencePublicPath || !evidenceHeadPublicPath) throw new Error("external --evidence-public-key and --evidence-head-public-key are required");
   const adapter = await loadCalibrationExecutionModule(adapterPath, authorization, { archiveDirectory,
-    authorizationTrust: authorizationPublicKey.export({ type: "spki", format: "pem" }), releaseDescriptor, releaseTrust, trustPolicy });
+    authorizationTrust: authorizationPublicKey.export({ type: "spki", format: "pem" }), releaseDescriptor,
+    releaseTrust, trustPolicy, revocationRegistry });
   const secureAttestorPrivatePath = assertSecureCalibrationPrivateKeyPath(attestorPrivatePath, { archiveDirectory, adapterPath });
   const secureArchivePrivatePath = assertSecureCalibrationPrivateKeyPath(archivePrivatePath, { archiveDirectory, adapterPath });
   const privateKey = createPrivateKey(await readFile(secureAttestorPrivatePath, "utf8"));
@@ -177,7 +182,7 @@ try {
   const archivePublicKey = createPublicKey(await readFile(resolve(archivePublicPath), "utf8"));
   const archiveKeyId = calibrationKeyId(archivePublicKey);
   const runner = new PhaseACalibrationRunner({ directory: archiveDirectory, mode: "EMPIRICAL_CALIBRATION",
-    implementationCommit: "8f06baae4cda7d6fbd9d61924b5c615f4a45ba59", executor: adapter, authorization,
+    implementationCommit: "8f06baae4cda7d6fbd9d61924b5c615f4a45ba59", executor: adapter, authorization, revocationRegistry,
     authorizationTrust: authorizationPublicKey.export({ type: "spki", format: "pem" }), releaseDescriptor, releaseTrust, trustPolicy,
     evidencePublicKey: await readFile(resolve(evidencePublicPath), "utf8"), evidenceHeadPublicKey: await readFile(resolve(evidenceHeadPublicPath), "utf8"),
     archiveSigner: { privateKey: archivePrivateKey, publicKey: archivePublicKey, keyId: archiveKeyId, trustScope: "EMPIRICAL_ARCHIVE" },

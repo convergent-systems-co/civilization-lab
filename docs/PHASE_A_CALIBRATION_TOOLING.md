@@ -69,12 +69,28 @@ attestor fallback.
 Release and authorization roots are additionally constrained by
 `config/calibration-trust-policy.json`, which is hashed into the tooling
 distribution and bound by both signed release and authorization records. It is
-deliberately shipped as `UNPROVISIONED_FAIL_CLOSED`: empirical deployment
-requires a separately reviewed distribution that provisions the immutable
-allowlists. No CLI argument can declare or replace those trust roots. Empirical
+provisioned only through the production trust workflow. An unprovisioned checkout
+remains `UNPROVISIONED_FAIL_CLOSED`; a campaign checkout records the immutable
+release and calibration-authorization key IDs in the policy. No calibration CLI
+argument can declare or replace those trust roots. Empirical
 archives must be pre-created as canonical, non-symlink, owner-only directories;
 signing keys must be owner-only regular files outside both the archive and the
 signed adapter package.
+
+The production-equivalent local trust deployment uses six distinct Ed25519
+identities: release, calibration authorization, archive, attestation, evidence,
+and evidence-head. Private keys and bearer credentials remain outside Git in
+owner-only storage. The evidence authority is an HTTPS-only durable service with
+a campaign CA pinned inside the signed adapter package. It persists immutable
+content-addressed evidence, signed archive receipts, and a signed monotonic head;
+restart recovery verifies the entire durable chain before accepting requests.
+The archive and attestation keys remain separate from both service keys.
+Provisioning creates a signed null evidence-head anchor before first startup;
+an established deployment never recreates a missing anchor. The evidence
+service rereads the fixed signed revocation registry before every production
+request, so a signed successor registry can revoke the campaign capability
+before world execution without rebuilding the adapter package. Successor
+registries must retain the signed issuance-registry ancestry.
 
 The deterministic synthetic fixture used by tests is software evidence only.
 It requires `SYNTHETIC_CONFORMANCE` provenance and matching synthetic evidence
@@ -116,6 +132,22 @@ text-bearing base64 evidence envelopes before selector admission.
   full signed authorization, release, adapter, evidence, evidence-head, archive,
   and independent attestor trust package is supplied. See `--help` for the
   required paths and identifiers.
+- `npm run calibration:trust:provision -- ...` creates distinct authority
+  identities, a local campaign CA, a signed release, a narrowly scoped Phase A
+  capability, a pinned adapter package, and an owner-only evidence-service
+  configuration. Output directories must be new and outside the repository.
+- `npm run calibration:evidence:serve -- /absolute/path/to/calibration-evidence-authority-config.json`
+  starts the provisioned HTTPS evidence authority. Its configuration, keys,
+  credential, storage, and empirical archive are external deployment state and
+  must never be committed.
+  Empirical dispatch also requires the signed `calibration-revocations.json`
+  produced by provisioning; absence, substitution, signature failure, or a
+  listed authority/capability fails closed. A successor registry is accepted
+  only when signed by the fixed calibration-authorization authority and when
+  it names the issuance registry in its ancestor chain. The evidence service
+  rereads this fixed deployment record before the pre-execution intent lookup
+  as well as finalization, so revocation takes effect without replacing the
+  signed adapter package.
 - `node scripts/calibration-cli.js run` remains dormant unless a later,
   separately signed authorization, provenance-locked adapter/release, external
   evidence trust roots, distinct archive-signing and attestation keys are

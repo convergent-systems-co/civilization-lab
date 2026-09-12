@@ -10,6 +10,9 @@
     "validate:calibration": "node --test --test-concurrency=1 test/calibration-protocol.test.js",
     "calibration:plan": "node scripts/calibration-cli.js plan",
     "calibration:verify": "node scripts/calibration-cli.js verify",
+    "calibration:trust:provision": "node scripts/calibration-trust-provision.js provision",
+    "calibration:evidence:serve": "node scripts/calibration-evidence-authority.js",
+    "calibration:trust:preflight": "node scripts/calibration-trust-preflight.js",
     "test": "node --test --test-concurrency=4",
     "check": "npm run validate && npm test && npm run build"
   },
