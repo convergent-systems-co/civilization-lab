@@ -15,14 +15,21 @@ export class CalibrationExecutionError extends Error {
     this.name = 'CalibrationExecutionError';
     this.code = code;
     this.calibrationClassification = classification;
+    if (options.boundary !== undefined) this.calibrationBoundary = options.boundary;
   }
 }
 
-export const infrastructureDeadline = message => new CalibrationExecutionError(
-  CALIBRATION_ERROR_CODES.INFRASTRUCTURE_DEADLINE, 'INFRASTRUCTURE_FAILURE', message);
+export function atCalibrationBoundary(error, boundary) {
+  if (error && typeof error === 'object' && error.calibrationBoundary === undefined)
+    Object.defineProperty(error, 'calibrationBoundary', { value: boundary, enumerable: false });
+  return error;
+}
 
-export const infrastructureAuthority = message => new CalibrationExecutionError(
-  CALIBRATION_ERROR_CODES.INFRASTRUCTURE_AUTHORITY, 'INFRASTRUCTURE_FAILURE', message);
+export const infrastructureDeadline = (message, options = {}) => new CalibrationExecutionError(
+  CALIBRATION_ERROR_CODES.INFRASTRUCTURE_DEADLINE, 'INFRASTRUCTURE_FAILURE', message, options);
+
+export const infrastructureAuthority = (message, options = {}) => new CalibrationExecutionError(
+  CALIBRATION_ERROR_CODES.INFRASTRUCTURE_AUTHORITY, 'INFRASTRUCTURE_FAILURE', message, options);
 
 export const authorityAuthorization = message => new CalibrationExecutionError(
   CALIBRATION_ERROR_CODES.AUTHORITY_AUTHORIZATION, 'PROTOCOL_VIOLATION', message);

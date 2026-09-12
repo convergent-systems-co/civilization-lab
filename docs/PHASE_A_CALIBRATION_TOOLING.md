@@ -1,6 +1,6 @@
 # Phase A calibration tooling
 
-Version: `phase-a-calibration-tooling-1.0.0`
+Version: `phase-a-calibration-tooling-1.1.0`
 
 This apparatus implements the frozen `pilot-0-calibration-1.1.0` protocol. It
 does not authorize empirical calibration, Pilot 0 research, model inference, or
@@ -19,9 +19,9 @@ For each generated parameter vector the runner:
 
 1. derives the vector from a registered baseline and one frozen operation;
 2. verifies the transition and held parameters;
-3. publishes a durable execution intent and idempotency key before every
-   empirical seed dispatch, then executes or recovers it through the injected
-   adapter;
+3. publishes one durable logical execution intent and an append-only execution
+   attempt before every seed dispatch, then executes or reconciles the intent
+   through the injected adapter;
 4. checkpoints each verified canonical evidence bundle immutably;
 5. regenerates treatment-neutral observations and all frozen metrics;
 6. presents only a closed blinded DTO to aggregation and selection;
@@ -32,10 +32,23 @@ For each generated parameter vector the runner:
 10. emits `CALIBRATION_RESULT` and a separate proposed
     `PILOT_0_WORLD_CONFIGURATION` only when the stopping rule passes.
 
-Crash recovery reads signed execution intents, content-addressed evidence, and
-immutable manifests before dispatching work. A pending empirical intent is
-recovered through the signed adapter's idempotent recovery contract; it is not
-dispatched as new work. A completed parameter/seed key cannot be counted twice.
+Crash recovery reads signed execution intents, append-only attempt lineage,
+content-addressed evidence, and immutable manifests before dispatching work. A
+retry preserves the logical intent, seed, vector, RNG, policy assignment, and
+protocol identity while creating a distinct child execution-attempt ID. The
+signed adapter reconciles the stable idempotency key against authoritative
+evidence state before executing. `completed_keys` indexes only a valid terminal
+calibration disposition; an infrastructure or implementation failure is never
+a completed seed. A completed parameter/seed key cannot be counted twice.
+
+Execution attempts use the explicit states `PENDING`, `DISPATCHING`, `RUNNING`,
+`SUCCEEDED`, `FAILED_RETRYABLE`, `FAILED_TERMINAL`, `QUARANTINED`, and
+`RECOVERING`. Uncertain authority failures are quarantined with explicit absent
+evidence, last-known boundary, authority identity, preflight, error, receipt,
+and lineage fields. Recovery is forbidden until the authority is reconciled;
+its durable finalization and monotonic evidence head override runner-local
+assumptions. Terminal implementation, protocol, blinding, or research-design
+failures stop the campaign and require the applicable authorization boundary.
 Corruption, unknown fields, missing seeds, unregistered values, protocol drift,
 baseline drift, blinding disclosures, and invalid signatures fail closed.
 
@@ -96,6 +109,42 @@ The deterministic synthetic fixture used by tests is software evidence only.
 It requires `SYNTHETIC_CONFORMANCE` provenance and matching synthetic evidence
 and result classes. It is not a calibration parameter evaluation and cannot be
 promoted to or verified as an empirical archive.
+
+## Recovery and failure evidence
+
+`completed_keys` indexes only a frozen terminal calibration disposition
+(`PARAMETER_FAILURE` or `ACCEPTED_CONFIGURATION`). Execution intents and their
+at-least-once attempts are separate signed state. A retry retains the same
+calibration key, seed, parameter vector, policy assignment, RNG inputs,
+protocol, and authorized apparatus, while receiving a new attempt ID linked in
+the signed state. Each failed-attempt artifact is an immutable snapshot; its
+parent is fixed at failure time and later successor linkage is append-only in
+the signed state generations.
+
+The authority boundary matrix is fail-closed:
+
+| Failure boundary | Attempt disposition | Retry condition | Source of truth |
+|---|---|---|---|
+| Before dispatch | `FAILED_RETRYABLE` | A fresh authorization preflight passes | Signed runner intent and archive head |
+| After dispatch, before world | `QUARANTINED` | Signed authority observation establishes absence or the stored intent | Evidence authority observation |
+| During world, before commit | `QUARANTINED` | Signed observation establishes no finalization; deterministic replay retains the same request | Evidence authority observation |
+| During multi-event/object commit | `QUARANTINED` | Pending transaction is completed or absence is authoritatively established | Durable authority pending/object records |
+| Commit complete, response lost | `QUARANTINED` until reconciled | `FINALIZED` returns the exact retained result | Signed finalization and monotonic authority head |
+| Head advanced, runner unaware | `QUARANTINED` until reconciled | Pending/finalized state is recovered without allocating another head | Signed authority head and pending transaction |
+| Final attestation interrupted | `QUARANTINED` | Authority completes the immutable pending transaction | Durable pending transaction |
+
+Every recovery observation is schema-validated and signed by the pinned
+evidence-head key. It is preserved in the failed-attempt record even if a later
+retry boundary also fails. Archive reopening independently revalidates its
+signature, intent binding, state/nullability relationships, and any nested
+authority-head identity. Cross-process authority operations use an owner-only
+storage lock; an ambiguous stale lock requires operator recovery and cannot
+allocate a competing head.
+
+A replacement campaign capability may carry a signed
+`PREDECESSOR_FAILED_CAMPAIGN` reference. It imports no completed keys, seeds, or
+parameter-vector outcomes. The replacement archive starts empty and preserves
+the defective campaign only by immutable identity and digest.
 
 ## Metric and selection integrity
 
@@ -161,10 +210,6 @@ must not be committed as repository source.
 
 ## Verification status
 
-The current hardening edits pass the focused calibration suites recorded in
-`validation/CALIBRATION_TOOLING_REVIEW.json`, including production-shaped metric
-derivation, archive retention, release trust, authorization, execution recovery,
-search integrity, and partial-round resume. Contract validation and the build
-also pass. The integrated repository-wide test suite remains intentionally
-deferred until the remediation is stable; this document does not claim that it
-was run.
+Validation status is recorded only by the release workflow after the complete
+suite and independent recovery review have passed. This document does not turn
+an implementation checkout into empirical authority.

@@ -1,4 +1,5 @@
 import { assert, canonicalize, clone, sha256, stableId } from './core.js';
+import { atCalibrationBoundary, infrastructureAuthority } from './calibration-errors.js';
 import { assertValidSchema } from './schema.js';
 import { makeWorld } from './world.js';
 import { ActionLedger } from './contracts.js';
@@ -122,9 +123,44 @@ export function createPhaseAProductionAdapter({ executionMode = 'EMPIRICAL_CALIB
       'empirical adapter requires signed deterministic deadlines');
   }
   let adapterHash = null;
-  async function execute(request, workerContext = {}) {
-    const materialized = validateRequest(request, executionMode), prior = await journal.get(request.idempotencyKey);
-    if (prior) { assert(prior.request_hash === sha256(request), 'execution request changed for existing intent'); return clone(prior.result); }
+  const faultAt = async (stage, boundary, context) => {
+    try { await fault(stage, context); }
+    catch (error) {
+      const bounded = atCalibrationBoundary(error, boundary);
+      if (context.authority_observation) Object.defineProperty(bounded, 'calibrationAuthorityObservation',
+        { value: clone(context.authority_observation) });
+      throw bounded;
+    }
+  };
+  async function executeInternal(request, workerContext = {}, reconciledPrior = undefined) {
+    const materialized = validateRequest(request, executionMode);
+    await faultAt('before_dispatch', 'BEFORE_DISPATCH_AUTHORITY_RECONCILIATION',
+      { execution_intent_id: request.idempotencyKey });
+    let prior = reconciledPrior;
+    if (reconciledPrior === undefined) {
+      try { prior = await journal.get(request.idempotencyKey); }
+      catch (error) { throw atCalibrationBoundary(error, 'BEFORE_DISPATCH_AUTHORITY_RECONCILIATION'); }
+    }
+    const recoveryObservation = prior?.authority_observation ?? null;
+    if (recoveryObservation) {
+      const observation = prior.authority_observation.body;
+      assert(observation?.execution_intent_id === request.idempotencyKey &&
+        ['ABSENT','INTENT_STORED','FINALIZATION_PENDING','FINALIZED'].includes(observation.state),
+      'authority observation is malformed');
+      if (observation.request_hash !== null) assert(observation.request_hash === sha256(request),
+        'execution request changed for existing intent');
+      if (observation.state === 'FINALIZED') return clone(observation.result);
+      if (observation.state === 'FINALIZATION_PENDING') {
+        const error = infrastructureAuthority('evidence authority finalization is pending recovery',
+          { boundary: 'AUTHORITY_FINALIZATION_PENDING' });
+        Object.defineProperty(error, 'calibrationAuthorityObservation', { value: clone(prior.authority_observation) });
+        throw error;
+      }
+    } else if (prior) {
+      assert(prior.request_hash === sha256(request), 'execution request changed for existing intent'); return clone(prior.result);
+    }
+    await faultAt('after_dispatch_before_world_execution', 'AFTER_DISPATCH_BEFORE_WORLD_EXECUTION',
+      { execution_intent_id: request.idempotencyKey, authority_observation: recoveryObservation });
     assert(request.adapterContractHash === adapterHash, 'execution request does not bind this adapter contract');
     if (executionMode === 'EMPIRICAL_CALIBRATION') assert(request.adapterPackageHash === workerContext.adapterPackageDigest &&
       /^[a-f0-9]{64}$/.test(request.adapterPackageHash), 'execution request does not bind the signed adapter package');
@@ -135,11 +171,18 @@ export function createPhaseAProductionAdapter({ executionMode = 'EMPIRICAL_CALIB
     const binding = executionBinding(request, materialized, assignment, adapterHash, workerContext.adapterPackageDigest);
     const runId = stableId('phase-a-world-run', request.calibrationRunId, request.attemptId, request.seed);
     const world = makeWorld({ runId, seed: request.seed, config: materialized.effective_configuration, executionBinding: binding });
+    await faultAt('after_first_canonical_event', 'AFTER_FIRST_CANONICAL_EVENT', { execution_intent_id: request.idempotencyKey,
+      emitted_event_count: world.evidence.events.length, authoritative_commit: false, authority_observation: recoveryObservation });
     const bindings = Object.keys(world.polities).sort().map(actorId => ({ actorId,
       sessionId: stableId('phase-a-policy-session', world.runId, actorId), condition: clone(PHASE_A_NEUTRAL_CONDITION) }));
     const context = { world, ledger: new ActionLedger(world.evidence), bindings, assignment, state: null, at: 0,
       phaseBudgets: materialized.phase_budget_overrides };
-    while (world.turn < 20 && !world.evidence.events.some(event => event.event_type === 'RunDisposition')) executeLifecycleTurn(context);
+    while (world.turn < 20 && !world.evidence.events.some(event => event.event_type === 'RunDisposition')) {
+      executeLifecycleTurn(context);
+      await faultAt('during_world_execution', 'DURING_WORLD_EXECUTION', { execution_intent_id: request.idempotencyKey,
+        turn: world.turn, emitted_event_count: world.evidence.events.length, authoritative_commit: false,
+        authority_observation: recoveryObservation });
+    }
     const objectiveReasons = new Set(request.objectiveTerminalPredicates);
     assert(world.terminal && (world.turn === 20 && world.terminationReason === 'pilot_cap' ||
       world.turn < 20 && objectiveReasons.has(world.terminationReason)),
@@ -149,27 +192,80 @@ export function createPhaseAProductionAdapter({ executionMode = 'EMPIRICAL_CALIB
     const bundle = world.evidence.bundle();
     const replayed = reconstructRun(bundle, { conditionValidator: assertPhaseANeutralCondition });
     assert(replayed.world.stateHash() === world.stateHash() && replayed.resolvedTurns === world.turn, 'independent Phase A replay mismatch');
-    await fault('after_exact_replay_before_seal', { execution_intent_id: request.idempotencyKey, evidence_hash: sha256(bundle) });
+    await faultAt('after_exact_replay_before_seal', 'AFTER_EXACT_REPLAY_BEFORE_SEAL',
+      { execution_intent_id: request.idempotencyKey, evidence_hash: sha256(bundle), authority_observation: recoveryObservation });
     let result = bundle;
     if (executionMode === 'EMPIRICAL_CALIBRATION') {
-      const finalized = await evidenceAuthority.finalize({ execution_intent_id: request.idempotencyKey,
-        request_hash: sha256(request), bundle: clone(bundle), request: clone(request), binding: clone(binding), adapterHash,
-        adapterPackageDigest: workerContext.adapterPackageDigest });
+      await faultAt('before_evidence_commit', 'BEFORE_EVIDENCE_COMMIT',
+        { execution_intent_id: request.idempotencyKey, evidence_hash: sha256(bundle), authority_observation: recoveryObservation });
+      let finalized;
+      try {
+        finalized = await evidenceAuthority.finalize({ execution_intent_id: request.idempotencyKey,
+          request_hash: sha256(request), bundle: clone(bundle), request: clone(request), binding: clone(binding), adapterHash,
+          adapterPackageDigest: workerContext.adapterPackageDigest });
+      } catch (error) {
+        const bounded = atCalibrationBoundary(error, 'EVIDENCE_COMMIT_ACKNOWLEDGEMENT_UNCERTAIN');
+        if (recoveryObservation) Object.defineProperty(bounded, 'calibrationAuthorityObservation',
+          { value: clone(recoveryObservation) });
+        throw bounded;
+      }
       // The authority client verifies and strips its transport-level intent
       // binding before exposing the closed adapter-result payload.
       result = clone(finalized);
     }
-    await fault('after_authority_finalize', { execution_intent_id: request.idempotencyKey, evidence_hash: sha256(bundle) });
+    try { await fault('after_authority_finalize', { execution_intent_id: request.idempotencyKey, evidence_hash: sha256(bundle) }); }
+    catch {
+      const error = infrastructureAuthority('runner acknowledgement lost after authoritative finalization',
+        { boundary: 'AFTER_AUTHORITY_FINALIZE_BEFORE_RUNNER_ACK' });
+      Object.defineProperty(error, 'calibrationRawResult', { value: clone(result) });
+      Object.defineProperty(error, 'calibrationEvidenceHeadReceipts', { value:
+        [result.evidence_head_receipt, result.adapter_execution_receipt].filter(Boolean).map(clone) });
+      if (recoveryObservation) Object.defineProperty(error, 'calibrationAuthorityObservation',
+        { value: clone(recoveryObservation) });
+      throw error;
+    }
     if (executionMode !== 'EMPIRICAL_CALIBRATION') await journal.put(request.idempotencyKey, { request_hash: sha256(request), result });
-    await fault('after_journal', { execution_intent_id: request.idempotencyKey, evidence_hash: sha256(bundle) });
+    try { await fault('after_journal', { execution_intent_id: request.idempotencyKey, evidence_hash: sha256(bundle) }); }
+    catch {
+      const error = infrastructureAuthority('runner acknowledgement lost after durable journal update',
+        { boundary: executionMode === 'EMPIRICAL_CALIBRATION' ? 'AFTER_AUTHORITY_FINALIZE_BEFORE_RUNNER_ACK' : 'AFTER_JOURNAL_BEFORE_RUNNER_ACK' });
+      if (executionMode === 'EMPIRICAL_CALIBRATION') {
+        Object.defineProperty(error, 'calibrationRawResult', { value: clone(result) });
+        Object.defineProperty(error, 'calibrationEvidenceHeadReceipts', { value:
+          [result.evidence_head_receipt, result.adapter_execution_receipt].filter(Boolean).map(clone) });
+      }
+      if (recoveryObservation) Object.defineProperty(error, 'calibrationAuthorityObservation',
+        { value: clone(recoveryObservation) });
+      throw error;
+    }
     return clone(result);
   }
 
+  async function execute(request, workerContext = {}) { return executeInternal(request, workerContext); }
+
   async function recover(request, workerContext = {}) {
     validateRequest(request, executionMode);
-    const prior = await journal.get(request.idempotencyKey);
-    if (prior) { assert(prior.request_hash === sha256(request), 'execution request changed for existing intent'); return clone(prior.result); }
-    return execute(request, workerContext);
+    let prior;
+    try { prior = await journal.get(request.idempotencyKey); }
+    catch (error) { throw atCalibrationBoundary(error, 'RECOVERY_AUTHORITY_RECONCILIATION'); }
+    if (prior?.authority_observation) {
+      const observation = prior.authority_observation.body;
+      assert(observation?.execution_intent_id === request.idempotencyKey &&
+        ['ABSENT','INTENT_STORED','FINALIZATION_PENDING','FINALIZED'].includes(observation.state),
+      'authority observation is malformed');
+      if (observation.request_hash !== null) assert(observation.request_hash === sha256(request),
+        'execution request changed for existing intent');
+      if (observation.state === 'FINALIZED') return clone(observation.result);
+      if (observation.state === 'FINALIZATION_PENDING') {
+        const error = infrastructureAuthority('evidence authority finalization is pending recovery',
+          { boundary: 'AUTHORITY_FINALIZATION_PENDING' });
+        Object.defineProperty(error, 'calibrationAuthorityObservation', { value: clone(prior.authority_observation) });
+        throw error;
+      }
+    } else if (prior) {
+      assert(prior.request_hash === sha256(request), 'execution request changed for existing intent'); return clone(prior.result);
+    }
+    return executeInternal(request, workerContext, prior);
   }
   const contract = freeze({ version: VERSION, mode: executionMode, treatment_neutral: true, model_use_declared: false,
     seed_panel_hash: sha256(calibrationProtocol().seed_panel.seeds), max_turns: 20,

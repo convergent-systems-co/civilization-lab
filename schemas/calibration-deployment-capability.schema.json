@@ -11,7 +11,7 @@
     "implementation_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "implementation_tag": {"const": "v0.1.0-pilot0"},
     "baseline_tag_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
-    "tooling_version": {"const": "phase-a-calibration-tooling-1.0.0"},
+    "tooling_version": {"const": "phase-a-calibration-tooling-1.1.0"},
     "calibration_tooling_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "protocol_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "parameter_registry_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
@@ -39,6 +39,22 @@
     "archive_destination_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "campaign_id": {"type": "string", "minLength": 1},
     "calibration_run_id": {"type": "string", "minLength": 1},
+    "predecessor_failed_campaign": {
+      "type": "object", "additionalProperties": false,
+      "required": ["reference_type", "disposition", "campaign_id", "calibration_run_id", "archive_head", "archive_tree_digest", "disposition_record_hash", "parameter_vectors_successfully_evaluated", "calibration_seeds_completed", "imported_completed_keys"],
+      "properties": {
+        "reference_type": {"const": "PREDECESSOR_FAILED_CAMPAIGN"},
+        "disposition": {"const": "FAILED_PRE_CALIBRATION_EXECUTION"},
+        "campaign_id": {"type": "string", "minLength": 1},
+        "calibration_run_id": {"type": "string", "minLength": 1},
+        "archive_head": {"type": "object", "additionalProperties": false, "required": ["generation", "digest"], "properties": {"generation": {"type": "integer", "minimum": 0}, "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}},
+        "archive_tree_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "disposition_record_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "parameter_vectors_successfully_evaluated": {"const": 0},
+        "calibration_seeds_completed": {"const": 0},
+        "imported_completed_keys": {"type": "array", "maxItems": 0}
+      }
+    },
     "adapter_executable": {"type": "object"},
     "public_key": {"type": "string", "minLength": 80},
     "signature": {"type": "string", "minLength": 80}

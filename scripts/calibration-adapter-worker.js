@@ -18,8 +18,12 @@ const SAFE_ERRORS = Object.freeze({
 const safeError = error => {
   const code = typeof error?.code === "string" && SAFE_ERRORS[error.code] === error?.calibrationClassification
     ? error.code : "CALIBRATION_IMPLEMENTATION_DEFECT";
-  return { version: "phase-a-adapter-worker-error-1.0.0", code,
-    calibration_classification: SAFE_ERRORS[code], reason: code };
+  return { version: "phase-a-adapter-worker-error-1.1.0", code,
+    calibration_classification: SAFE_ERRORS[code], reason: code,
+    boundary: typeof error?.calibrationBoundary === "string" ? error.calibrationBoundary : null,
+    authority_observation: error?.calibrationAuthorityObservation ?? null,
+    raw_result: error?.calibrationRawResult ?? null,
+    evidence_head_receipts: error?.calibrationEvidenceHeadReceipts ?? [] };
 };
 
 async function main() {

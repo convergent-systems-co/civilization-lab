@@ -109,7 +109,8 @@ test('signed package finalizes and recovers through the exact isolated evidence-
     process.env.CIVLAB_CALIBRATION_EVIDENCE_AUTH_TOKEN = token;
     const declaration = await buildPhaseAAdapterPackage({ repositoryRoot: root, destination: packageRoot,
       evidenceAuthorityEndpoint: `http://127.0.0.1:${authority.port}/seal`, workerTimeoutMs: 120_000,
-      evidenceAuthorityTimeoutMs: 120_000, allowInsecureLoopbackForConformance: true });
+      evidenceAuthorityTimeoutMs: 120_000, evidenceHeadPublicKey: pem(head.publicKey),
+      allowInsecureLoopbackForConformance: true });
     const packageDigest = sha256(declaration);
     const entrypoint = join(packageRoot, declaration.entrypoint);
     const direct = (await import(`${pathToFileURL(entrypoint).href}?execute_contract`)).calibrationAdapter;

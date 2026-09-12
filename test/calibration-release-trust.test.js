@@ -260,19 +260,42 @@ test("isolated worker preserves closed typed failure classification without forw
   }
 });
 
+test("signal loss from an isolated execution worker is retryable infrastructure uncertainty", async () => {
+  const c = await context();
+  const executeSource = 'async function execute() { process.kill(process.pid, "SIGKILL"); }';
+  const recoverSource = 'async function recover() { return execute(); }';
+  const contract = { ...c.adapter.contract, execute_sha256: sha256(executeSource) };
+  const source = `${executeSource}\n${recoverSource}\nexport const calibrationAdapter = { contract: ${JSON.stringify(contract)}, execute, recover };\n`;
+  await writeFile(c.modulePath, source);
+  const declaration = { ...c.body.adapter_executable, files: { ...c.body.adapter_executable.files,
+    "adapter.mjs": createHash("sha256").update(source).digest("hex") } };
+  const authorized = authorizeDeclaration(c, declaration, contract);
+  const adapter = await loadCalibrationExecutionModule(c.modulePath, authorized.capability, authorized.options);
+  await assert.rejects(adapter.execute({ synthetic: true }), error => {
+    assert.equal(error.code, "CALIBRATION_INFRASTRUCTURE_AUTHORITY");
+    assert.equal(error.calibrationClassification, "INFRASTRUCTURE_FAILURE");
+    assert.equal(error.calibrationBoundary, "WORKER_EXIT_EXECUTION_STATE_UNCERTAIN");
+    return true;
+  });
+});
+
 test("evidence-authority transport classifications survive the complete client-worker-parent boundary", async () => {
   const c = await context();
   const priorToken = process.env.CIVLAB_CALIBRATION_EVIDENCE_AUTH_TOKEN;
   process.env.CIVLAB_CALIBRATION_EVIDENCE_AUTH_TOKEN = "end-to-end-authority-secret";
   try {
     await mkdir(join(c.modulePath, "../src"));
-    const dependencyNames = ["core.js", "calibration-errors.js", "calibration-evidence-authority-client.js"];
+    const dependencyNames = ["core.js", "schema.js", "calibration-errors.js", "calibration-evidence-authority-client.js"];
     const dependencyFiles = {};
     for (const name of dependencyNames) {
       const bytes = readFileSync(new URL(`../src/${name}`, import.meta.url));
       await writeFile(join(c.modulePath, `../src/${name}`), bytes);
       dependencyFiles[`src/${name}`] = createHash("sha256").update(bytes).digest("hex");
     }
+    await mkdir(join(c.modulePath, "../schemas"));
+    const observationSchema = readFileSync(new URL("../schemas/calibration-evidence-authority-observation.schema.json", import.meta.url));
+    await writeFile(join(c.modulePath, "../schemas/calibration-evidence-authority-observation.schema.json"), observationSchema);
+    dependencyFiles["schemas/calibration-evidence-authority-observation.schema.json"] = createHash("sha256").update(observationSchema).digest("hex");
     const executeSource = `async function execute(request) {
   const credential = request.scenario === "credential" ? () => { throw new Error("credential-resolution-private"); } : () => process.env.CIVLAB_CALIBRATION_EVIDENCE_AUTH_TOKEN;
   const fetchImplementation = async () => {

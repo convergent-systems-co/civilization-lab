@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, verify } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { request as httpsRequest } from 'node:https';
 import { chmod, mkdir, mkdtemp, readFile, stat, unlink, writeFile } from 'node:fs/promises';
@@ -31,7 +31,7 @@ const post = ({ endpoint, ca, token, body }) => new Promise((resolve, reject) =>
   request.once('error', reject); request.end(canonicalize(body));
 });
 
-async function fixture(t, authorizationCheck = authorizeFinalization, requestCheck = null) {
+async function fixture(t, authorizationCheck = authorizeFinalization, requestCheck = null, fault = async () => {}) {
   const directory = await mkdtemp(join(tmpdir(), 'civilization-lab-evidence-authority-'));
   await chmod(directory, 0o700);
   const trustedHeadDirectory = join(directory, 'external-head-anchor');
@@ -48,7 +48,7 @@ async function fixture(t, authorizationCheck = authorizeFinalization, requestChe
     evidencePrivateKey: pem(evidence.privateKey, 'pkcs8'),
     evidenceHeadPrivateKey: pem(head.privateKey, 'pkcs8'),
     authorityId: 'phase-a-local-authority-test', authorizeRequest: requestCheck,
-    authorizeFinalization: authorizationCheck, trustedHeadDirectory,
+    authorizeFinalization: authorizationCheck, trustedHeadDirectory, fault,
   });
   await authority.initialize();
   return { directory, trustedHeadDirectory, authority, evidence, head };
@@ -115,6 +115,35 @@ test('FINALIZE is idempotent, content-addressed, signed by distinct keys, and re
   await assert.rejects(restarted.finalize({ ...input, adapterHash: 'e'.repeat(64) }), /mutation|conflict/);
 });
 
+test('signed authority observations distinguish absent, stored, pending, and finalized intent state', async t => {
+  let crashAtHead = false;
+  const f = await fixture(t, authorizeFinalization, null, async point => {
+    if (crashAtHead && point === 'after_evidence_head_advanced_before_finalization') {
+      crashAtHead = false; throw new Error('head response lost');
+    }
+  });
+  const id = 'intent-observation-0001';
+  const check = (envelope, state) => {
+    assert.equal(envelope.body.state, state);
+    assert.equal(envelope.body.execution_intent_id, id);
+    assert.equal(verify(null, Buffer.from(canonicalize(envelope.body)), f.head.publicKey,
+      Buffer.from(envelope.signature, 'base64')), true);
+  };
+  check(await f.authority.observeIntent(id), 'ABSENT');
+  const input = finalizationInput(id);
+  await f.authority.putIntent(id, { request_hash: input.request_hash });
+  check(await f.authority.observeIntent(id), 'INTENT_STORED');
+  crashAtHead = true;
+  await assert.rejects(() => f.authority.finalize(input), /head response lost/);
+  check(await f.authority.observeIntent(id), 'FINALIZATION_PENDING');
+  const restarted = createCalibrationEvidenceAuthority({ directory: f.directory,
+    credential: 'synthetic-authority-credential', evidencePrivateKey: pem(f.evidence.privateKey, 'pkcs8'),
+    evidenceHeadPrivateKey: pem(f.head.privateKey, 'pkcs8'), authorityId: 'phase-a-local-authority-test',
+    authorizeFinalization, trustedHeadDirectory: f.trustedHeadDirectory });
+  await restarted.initialize();
+  check(await restarted.observeIntent(id), 'FINALIZED');
+});
+
 test('pending transaction recovers after a crash between signed head and finalized publication', async t => {
   const f = await fixture(t), input = finalizationInput();
   const result = await f.authority.finalize(input);
@@ -135,6 +164,70 @@ test('pending transaction recovers after a crash between signed head and finaliz
     trustedHeadDirectory: f.trustedHeadDirectory });
   await restartedEarlier.initialize();
   assert.deepEqual((await restartedEarlier.getIntent(input.execution_intent_id)).result, result);
+});
+
+test('faults at every evidence commit boundary recover from authoritative state without duplicate heads', async t => {
+  for (const [index, boundary] of [
+    'before_evidence_object_commit',
+    'after_evidence_object_commit_before_attestation',
+    'during_final_attempt_attestation',
+    'after_evidence_head_advanced_before_finalization',
+    'after_finalization_before_head_acknowledgement'
+  ].entries()) {
+    let injected = false;
+    const f = await fixture(t, authorizeFinalization, null, async point => {
+      if (!injected && point === boundary) { injected = true; throw new Error(`crash:${boundary}`); }
+    });
+    const input = finalizationInput(`intent-boundary-${String(index).padStart(4, '0')}`);
+    await assert.rejects(() => f.authority.finalize(input), new RegExp(`crash:${boundary}`));
+    const restarted = createCalibrationEvidenceAuthority({ directory: f.directory,
+      credential: 'synthetic-authority-credential', evidencePrivateKey: pem(f.evidence.privateKey, 'pkcs8'),
+      evidenceHeadPrivateKey: pem(f.head.privateKey, 'pkcs8'), authorityId: 'phase-a-local-authority-test',
+      authorizeFinalization, trustedHeadDirectory: f.trustedHeadDirectory });
+    await restarted.initialize();
+    const result = await restarted.finalize(structuredClone(input));
+    assert.equal(result.bundle.run_id, input.bundle.run_id);
+    const verified = await verifyCalibrationEvidenceAuthority({ directory: f.directory,
+      evidencePublicKey: pem(f.evidence.publicKey, 'spki'), evidenceHeadPublicKey: pem(f.head.publicKey, 'spki'),
+      authorityId: 'phase-a-local-authority-test' });
+    assert.equal(verified.head.generation, 0, `${boundary} must produce exactly one authoritative disposition`);
+  }
+});
+
+test('two authority processes cannot allocate competing dispositions for one global head', async t => {
+  const f = await fixture(t);
+  const peer = createCalibrationEvidenceAuthority({ directory: f.directory,
+    credential: 'synthetic-authority-credential', evidencePrivateKey: pem(f.evidence.privateKey, 'pkcs8'),
+    evidenceHeadPrivateKey: pem(f.head.privateKey, 'pkcs8'), authorityId: 'phase-a-local-authority-test',
+    authorizeFinalization, trustedHeadDirectory: f.trustedHeadDirectory });
+  await peer.initialize();
+  const first = finalizationInput('intent-cross-process-lock-0001');
+  const second = finalizationInput('intent-cross-process-lock-0002');
+  const settled = await Promise.allSettled([f.authority.finalize(first), peer.finalize(second)]);
+  assert.equal(settled.filter(item => item.status === 'fulfilled').length, 1);
+  assert.equal(settled.filter(item => item.status === 'rejected').length, 1);
+  const rejected = settled.find(item => item.status === 'rejected');
+  assert.match(rejected.reason.message, /already claimed|stale-lock recovery/);
+  const verified = await verifyCalibrationEvidenceAuthority({ directory: f.directory,
+    evidencePublicKey: pem(f.evidence.publicKey, 'spki'), evidenceHeadPublicKey: pem(f.head.publicKey, 'spki'),
+    authorityId: 'phase-a-local-authority-test' });
+  assert.equal(verified.head.generation, 0);
+});
+
+test('client rejects a malformed or forged recovery observation before it can authorize replay', async () => {
+  const head = generateKeyPairSync('ed25519');
+  const configuration = { version: 'phase-a-evidence-authority-client-1.1.0',
+    request_version: 'phase-a-evidence-authority-request-1.1.0', endpoint: 'http://127.0.0.1:1/seal',
+    request_timeout_ms: 2000, worker_timeout_ms: 5000, transport: 'INSECURE_LOOPBACK_CONFORMANCE_ONLY',
+    observation_public_key: pem(head.publicKey, 'spki') };
+  const client = createEvidenceAuthorityClient({ configuration, credential: 'credential', fetchImplementation: async (_url, options) => {
+    const request = JSON.parse(options.body);
+    return { ok: true, status: 200, async json() { return { execution_intent_id: request.execution_intent_id,
+      observation: { body: { version: 'phase-a-evidence-authority-observation-1.0.0', authority_id: 'forged',
+        execution_intent_id: request.execution_intent_id, state: 'ABSENT', request_hash: 'a'.repeat(64),
+        result: null, finalization_hash: null, authority_head: null }, signature: 'AAAA' } }; } };
+  } });
+  await assert.rejects(client.observeIntent('intent-forged-observation-0001'), /signed authority observation invalid/);
 });
 
 test('external trusted head detects a complete local rollback', async t => {
@@ -222,9 +315,9 @@ test('signed monotonic authority head rejects rollback, conflicts, and durable t
 test('authority rejects malformed, unauthenticated, and provenance-conflicting operations', async t => {
   const f = await fixture(t), input = finalizationInput();
   await assert.rejects(f.authority.handle({ credential: 'wrong', operation: 'GET_EXECUTION_INTENT',
-    execution_intent_id: input.execution_intent_id, input: { execution_intent_id: input.execution_intent_id } }), /unauthorized/);
+    execution_intent_id: input.execution_intent_id, input: { execution_intent_id: input.execution_intent_id } }), /request rejected/);
   await assert.rejects(f.authority.handle({ credential: 'synthetic-authority-credential', operation: 'UNKNOWN',
-    execution_intent_id: input.execution_intent_id, input: { execution_intent_id: input.execution_intent_id } }), /operation/);
+    execution_intent_id: input.execution_intent_id, input: { execution_intent_id: input.execution_intent_id } }), /request rejected/);
   await f.authority.putIntent(input.execution_intent_id, { request_hash: '0'.repeat(64) });
   await assert.rejects(f.authority.finalize({ ...input, request_hash: 'f'.repeat(64) }), /request.*hash|provenance/);
 });
@@ -272,6 +365,35 @@ test('production endpoint is HTTPS-only with bearer authentication and no plaint
   const denied = await post({ endpoint, ca: await readFile(certPath), token: 'wrong-credential', body: message });
   assert.equal(denied.status, 400); assert.equal(denied.body, '{"error":"rejected"}');
   await assert.rejects(fetch(endpoint), /fetch failed/);
+});
+
+test('HTTPS reports internal authority/storage failure as retryable infrastructure, not protocol rejection', async t => {
+  let authorizationDependencyDown = true;
+  const f = await fixture(t, authorizeFinalization, async () => {
+    if (authorizationDependencyDown) throw new Error('synthetic revocation registry I/O outage');
+  }, async point => {
+    if (point === 'before_evidence_object_commit') throw new Error('synthetic internal storage outage');
+  });
+  const tls = join(f.directory, 'tls-internal-failure');
+  await mkdir(tls, { mode: 0o700 });
+  const keyPath = join(tls, 'server-key.pem'), certPath = join(tls, 'server-cert.pem');
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', keyPath, '-out', certPath,
+    '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1', '-days', '1'], { stdio: 'ignore' });
+  const certificate = await readFile(certPath);
+  const server = createCalibrationEvidenceAuthorityHttpsServer({ authority: f.authority,
+    certificate, privateKey: await readFile(keyPath), host: '127.0.0.1', port: 0 });
+  await server.start(); t.after(() => server.stop());
+  const client = createEvidenceAuthorityClient({ configuration: {
+    version: 'phase-a-evidence-authority-client-1.1.0', request_version: 'phase-a-evidence-authority-request-1.1.0',
+    endpoint: server.endpoint, request_timeout_ms: 2000, worker_timeout_ms: 5000, transport: 'HTTPS_PRODUCTION',
+    tls_ca_resource: 'config/calibration-evidence-authority-ca.pem', tls_ca_sha256: sha256(certificate.toString('utf8')),
+    observation_public_key: pem(f.head.publicKey, 'spki')
+  }, credential: 'synthetic-authority-credential', certificateAuthority: certificate });
+  await assert.rejects(client.getIntent('intent-https-authorization-io-0001'), error =>
+    error.code === 'CALIBRATION_INFRASTRUCTURE_AUTHORITY' && error.calibrationClassification === 'INFRASTRUCTURE_FAILURE');
+  authorizationDependencyDown = false;
+  await assert.rejects(client.finalize(finalizationInput('intent-https-internal-failure-0001')), error =>
+    error.code === 'CALIBRATION_INFRASTRUCTURE_AUTHORITY' && error.calibrationClassification === 'INFRASTRUCTURE_FAILURE');
 });
 
 test('production client accepts only its signed pinned CA and rejects substitution', async t => {

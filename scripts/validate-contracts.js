@@ -83,7 +83,7 @@ check(new Set(calibrationTrustPolicy.approved_release_key_ids).size === calibrat
 check(calibrationTrustPolicy.status === "PROVISIONED" ||
   calibrationTrustPolicy.approved_release_key_ids.length === 0 && calibrationTrustPolicy.approved_authorization_key_ids.length === 0,
 "unprovisioned calibration deployment trust policy must fail closed with empty allowlists");
-check(CALIBRATION_TOOLING_VERSION === "phase-a-calibration-tooling-1.0.0", "calibration tooling version is not frozen");
+check(CALIBRATION_TOOLING_VERSION === "phase-a-calibration-tooling-1.1.0", "calibration tooling version is not frozen");
 check(Object.keys(CALIBRATION_FAILURES).length === 7, "calibration failure taxonomy is incomplete");
 // Resolution shells out to git: a clone without the v0.1.0-pilot0 annotated tag must fail as a
 // readable FAIL line below, not abort this validator with an assertion stack trace.

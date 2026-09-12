@@ -8,6 +8,7 @@ import { assertEmpiricalCapability, inspectCalibrationRevocationStatus,
 import { assertValidSchema } from '../src/schema.js';
 import { createCalibrationEvidenceAuthority,
   createCalibrationEvidenceAuthorityHttpsServer,
+  evidenceAuthorityRequestRejected,
   reconcileRevocationAnchor } from '../src/calibration-evidence-authority-service.js';
 
 function usage() {
@@ -49,25 +50,30 @@ async function main() {
     await reconcileRevocationAnchor({ trustedHeadDirectory: resolve(config.trusted_head_directory),
       authorityId: config.authority_id, evidenceHeadPrivateKey,
       registry: { ...registry, parent_registry_hash: registry.parent_registry_hash } });
+    if (registry.revoked) throw evidenceAuthorityRequestRejected('campaign capability revoked');
+    if (Date.now() < authorizationCapability.not_before_ms || Date.now() >= authorizationCapability.expires_at_ms)
+      throw evidenceAuthorityRequestRejected('campaign capability outside validity interval');
     assertEmpiricalCapability(authorizationCapability, { ...options, now: Date.now() });
   };
   await assertCurrentAuthorization();
   const authorizeRequest = assertCurrentAuthorization;
   const authorizeFinalization = async input => {
     await assertCurrentAuthorization();
-    const request = input?.request;
-    assert(request?.schema_version === 'phase-a-execution-request-1.0.0' && request.mode === 'EMPIRICAL_CALIBRATION' &&
-      request.calibrationRunId === authorizationCapability.calibration_run_id && request.maxTurns === 20 &&
-      protocol.seed_panel.seeds.includes(request.seed), 'evidence finalization is outside the authorized campaign/seed/horizon');
-    validateCalibrationParameterSet(request.parameterSet);
-    assert(input.binding?.calibration_parameter_set_hash === sha256(request.parameterSet) &&
-      input.binding?.policy_manifest_hash === authorizationCapability.policy_manifest_hash &&
-      canonicalize(request.neutralPolicyManifest) === canonicalize(authorizationCapability.policy_manifest),
-    'evidence finalization parameter/policy binding mismatch');
-    const packageDigest = sha256(authorizationCapability.adapter_executable);
-    assert(input.adapterHash === authorizationCapability.adapter_hash && input.adapterPackageDigest === packageDigest &&
-      request.adapterContractHash === authorizationCapability.adapter_hash && request.adapterPackageHash === packageDigest,
-    'evidence finalization adapter authorization mismatch');
+    try {
+      const request = input?.request;
+      assert(request?.schema_version === 'phase-a-execution-request-1.0.0' && request.mode === 'EMPIRICAL_CALIBRATION' &&
+        request.calibrationRunId === authorizationCapability.calibration_run_id && request.maxTurns === 20 &&
+        protocol.seed_panel.seeds.includes(request.seed), 'evidence finalization is outside the authorized campaign/seed/horizon');
+      validateCalibrationParameterSet(request.parameterSet);
+      assert(input.binding?.calibration_parameter_set_hash === sha256(request.parameterSet) &&
+        input.binding?.policy_manifest_hash === authorizationCapability.policy_manifest_hash &&
+        canonicalize(request.neutralPolicyManifest) === canonicalize(authorizationCapability.policy_manifest),
+      'evidence finalization parameter/policy binding mismatch');
+      const packageDigest = sha256(authorizationCapability.adapter_executable);
+      assert(input.adapterHash === authorizationCapability.adapter_hash && input.adapterPackageDigest === packageDigest &&
+        request.adapterContractHash === authorizationCapability.adapter_hash && request.adapterPackageHash === packageDigest,
+      'evidence finalization adapter authorization mismatch');
+    } catch { throw evidenceAuthorityRequestRejected('evidence finalization outside signed scope'); }
   };
   const authority = createCalibrationEvidenceAuthority({ directory: resolve(config.storage_directory), credential,
     evidencePrivateKey, evidenceHeadPrivateKey, authorityId: config.authority_id,

@@ -32,6 +32,15 @@ const server = createServer(async (request, response) => {
       message.execution_intent_id !== message.input.execution_intent_id) throw new Error('version or intent binding');
     let result;
     if (message.operation === 'GET_EXECUTION_INTENT') result = { record: records.get(message.execution_intent_id) ?? null };
+    else if (message.operation === 'OBSERVE_EXECUTION_INTENT') {
+      const finalized = sealed.get(message.execution_intent_id), stored = records.get(message.execution_intent_id);
+      const body = { version: 'phase-a-evidence-authority-observation-1.0.0', authority_id: 'integration-helper-authority',
+        execution_intent_id: message.execution_intent_id,
+        state: finalized ? 'FINALIZED' : stored ? 'INTENT_STORED' : 'ABSENT',
+        request_hash: finalized?.requestHash ?? stored?.request_hash ?? null,
+        result: finalized?.result ?? null, finalization_hash: finalized ? sha256(finalized) : null, authority_head: null };
+      result = { observation: signed(body, headKey) };
+    }
     else if (message.operation === 'PUT_EXECUTION_INTENT') {
       const prior = records.get(message.execution_intent_id);
       if (prior && sha256(prior) !== sha256(message.input.record)) throw new Error('intent mutation');

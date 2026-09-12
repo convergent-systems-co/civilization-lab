@@ -42,6 +42,15 @@ try {
   const evidenceEndpoint = required('--evidence-endpoint');
   const evidenceStorageDirectory = resolve(required('--evidence-storage-dir'));
   const trustPolicyPath = resolve(required('--trust-policy-path'));
+  const predecessorDisposition = JSON.parse(await readFile(resolve(required('--predecessor-failed-campaign')), 'utf8'));
+  const predecessorFailedCampaign = {
+    reference_type: 'PREDECESSOR_FAILED_CAMPAIGN', disposition: predecessorDisposition.disposition,
+    campaign_id: predecessorDisposition.campaign_id, calibration_run_id: predecessorDisposition.calibration_run_id,
+    archive_head: predecessorDisposition.archive_head, archive_tree_digest: predecessorDisposition.archive_tree_digest,
+    disposition_record_hash: (await import('../src/core.js')).sha256(predecessorDisposition),
+    parameter_vectors_successfully_evaluated: predecessorDisposition.parameter_vectors_successfully_evaluated,
+    calibration_seeds_completed: predecessorDisposition.calibration_seeds_completed, imported_completed_keys: []
+  };
   const expectedPolicyPath = resolve(repositoryRoot, 'config/calibration-trust-policy.json');
   if (trustPolicyPath !== expectedPolicyPath) throw new Error('--trust-policy-path must identify the distribution-pinned calibration trust policy');
 
@@ -58,6 +67,7 @@ try {
   const adapterDeclaration = await buildPhaseAAdapterPackage({ repositoryRoot, destination: adapterPackageDirectory,
     evidenceAuthorityEndpoint: evidenceEndpoint,
     evidenceAuthorityCaCertificate: provisioned.tls.ca_certificate_path,
+    evidenceHeadPublicKey: provisioned.authorities.evidence_head.public_key_path,
     workerTimeoutMs: integer('--worker-timeout-ms'),
     evidenceAuthorityTimeoutMs: integer('--evidence-timeout-ms') });
   const adapterContract = createPhaseAProductionAdapter({ executionMode: 'EMPIRICAL_CALIBRATION',
@@ -67,6 +77,7 @@ try {
   const artifacts = await createCalibrationDeploymentArtifacts({ repositoryRoot, provisioned, archiveDirectory,
     adapterDeclaration, adapterContract, evidenceEndpoint, campaignId: required('--campaign-id'),
     calibrationRunId: required('--calibration-run-id'), notBeforeMs: integer('--not-before-ms'),
+    predecessorFailedCampaign,
     expiresAtMs: integer('--expires-at-ms'), baselineCommit: required('--baseline-commit'), baselineTag: required('--baseline-tag'),
     protocolPreparationCommit: required('--protocol-preparation-commit'), calibrationToolingCommit: required('--calibration-tooling-commit'),
     calibrationToolingImplementationCommit: required('--calibration-tooling-implementation-commit') });

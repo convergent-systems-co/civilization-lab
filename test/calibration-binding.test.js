@@ -26,7 +26,7 @@ const root = resolve(import.meta.dirname, "..");
 const IMPLEMENTATION_COMMIT = "8f06baae4cda7d6fbd9d61924b5c615f4a45ba59";
 const IMPLEMENTATION_TAG = "v0.1.0-pilot0";
 const PROTOCOL_VERSION = "pilot-0-calibration-1.1.0";
-const TOOLING_VERSION = "phase-a-calibration-tooling-1.0.0";
+const TOOLING_VERSION = "phase-a-calibration-tooling-1.1.0";
 const protocol = calibrationProtocol();
 const runnerSource = readFileSync(join(root, "src/calibration-runner.js"), "utf8");
 const pem = key => key.export({ type: "spki", format: "pem" });
@@ -251,7 +251,7 @@ test("production trust provisioning changes no authoritative research specificat
 
 test("artifact version constants stay as frozen, including the manifest-version anomaly", () => {
   const constant = name => runnerSource.match(new RegExp(`const ${name} = "([^"]+)"`))?.[1];
-  assert.equal(constant("STATE_VERSION"), "phase-a-calibration-state-1.0.0");
+  assert.equal(constant("STATE_VERSION"), "phase-a-calibration-state-2.0.0");
   assert.equal(constant("ATTESTATION_VERSION"), "phase-a-calibration-attestation-1.0.0");
   // Spec assumption 6: the manifest schema version is 2.0.0 while state and attestation are 1.0.0.
   // Confirmed and deliberately left as-is by task T2 (reported as an informational finding for a

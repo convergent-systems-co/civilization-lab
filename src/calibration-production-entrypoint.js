@@ -17,7 +17,7 @@ const evidenceAuthority = Object.freeze({ trustDomain: 'EXTERNAL_EVIDENCE_AUTHOR
   finalize: input => client.finalize(input) });
 const executionJournal = Object.freeze({
   durable: true,
-  async get(key) { return (await client.getIntent(key)).record; },
+  async get(key) { return { authority_observation: (await client.observeIntent(key)).observation }; },
   async put(key, value) { const response = await client.putIntent(key, value);
     if (response.status !== 'STORED_IDEMPOTENT') throw new Error('external execution journal rejected immutable record'); }
 });

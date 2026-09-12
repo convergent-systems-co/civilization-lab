@@ -39,7 +39,7 @@ function syntheticAttempt(calibrationRunId, { seed, attemptId, privateKey }) {
   const registry = parameterRegistry();
   const parameterSet = startingCalibrationParameterSet();
   const parameterSetHash = sha256(parameterSet);
-  const classification = CALIBRATION_FAILURES.INFRASTRUCTURE_FAILURE;
+  const classification = CALIBRATION_FAILURES.PARAMETER_FAILURE;
   const evidence = { classification, error_digest: sha256(attemptId), seed, parameter_set_hash: parameterSetHash };
   const metrics = {};
   const attempt = {

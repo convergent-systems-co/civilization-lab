@@ -1,6 +1,6 @@
 import { createHash, createPrivateKey, createPublicKey, randomUUID, sign, timingSafeEqual, verify } from 'node:crypto';
 import { createServer as createHttpsServer } from 'node:https';
-import { chmod, link, lstat, mkdir, open, readFile, readdir, rename, unlink } from 'node:fs/promises';
+import { chmod, link, lstat, mkdir, open, readFile, readdir, rename, rmdir, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { assert, canonicalize, clone, sha256 } from './core.js';
 import { verifyEvidenceIntegrity } from './replay.js';
@@ -11,6 +11,10 @@ const SERVICE_VERSION = 'phase-a-production-evidence-authority-1.0.0';
 const HASH = /^[a-f0-9]{64}$/;
 const INTENT = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$/;
 const HEAD_NAME = generation => String(generation).padStart(20, '0') + '.json';
+
+export function evidenceAuthorityRequestRejected(message = 'evidence authority request rejected') {
+  const error = new Error(message); error.code = 'EVIDENCE_AUTHORITY_REQUEST_REJECTED'; return error;
+}
 
 function keyId(key) {
   const publicKey = key?.type === 'public' ? key : createPublicKey(key);
@@ -160,7 +164,7 @@ function validateFinalize(input) {
 
 export function createCalibrationEvidenceAuthority({ directory, credential, evidencePrivateKey,
   evidenceHeadPrivateKey, authorityId, trustedHeadDirectory = null, authorizeRequest = null,
-  authorizeFinalization = null }) {
+  authorizeFinalization = null, fault = async () => {} }) {
   assert(typeof credential === 'string' && credential.length >= 16, 'evidence authority credential is unavailable');
   assert(typeof authorityId === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/.test(authorityId),
     'invalid evidence authority identity');
@@ -245,11 +249,15 @@ export function createCalibrationEvidenceAuthority({ directory, credential, evid
     if (pending.authority_head.body.generation === expectedGeneration) {
       assert(pending.authority_head.body.parent === (current?.digest ?? null), 'evidence authority conflicting/stale head update');
       await immutable(join(paths.heads, HEAD_NAME(expectedGeneration)), canonicalize(pending.authority_head));
+      await fault('after_evidence_head_advanced_before_finalization', {
+        execution_intent_id: pending.execution_intent_id, generation: expectedGeneration });
     } else {
       const published = await readFile(join(paths.heads, HEAD_NAME(pending.authority_head.body.generation)), 'utf8');
       assert(published === canonicalize(pending.authority_head), 'evidence authority conflicting finalized head');
     }
     await immutable(join(paths.finalizations, pending.execution_intent_id + '.json'), canonicalize(pending.finalization));
+    await fault('after_finalization_before_head_acknowledgement', {
+      execution_intent_id: pending.execution_intent_id, generation: pending.authority_head.body.generation });
     await reconcileAnchor(await latestHead());
   }
 
@@ -273,8 +281,18 @@ export function createCalibrationEvidenceAuthority({ directory, credential, evid
       evidence_head_key_id: headKeyId, head: await latestHead() };
   }
 
+  const operationLock = join(directory, '.authority-operation.lock');
   const serialized = work => {
-    const result = queue.then(async () => { if (!initialized) await initialize(); return work(); });
+    const result = queue.then(async () => {
+      await privateDirectory(directory);
+      try { await mkdir(operationLock, { mode: 0o700 }); }
+      catch {
+        const error = new Error('evidence authority operation already claimed by another process or requires stale-lock recovery');
+        error.code = 'EVIDENCE_AUTHORITY_BUSY'; throw error;
+      }
+      try { if (!initialized) await initialize(); return await work(); }
+      finally { await rmdir(operationLock); }
+    });
     queue = result.catch(() => {});
     return result;
   };
@@ -294,6 +312,41 @@ export function createCalibrationEvidenceAuthority({ directory, credential, evid
       assert(canonicalize(stored) === raw && stored.execution_intent_id === executionIntentId &&
         stored.record_hash === sha256(recordBytes), 'durable execution intent content address mismatch');
       return clone(stored.record);
+    });
+  }
+
+  async function observeIntent(executionIntentId) {
+    return serialized(async () => {
+      const id = safeIntent(executionIntentId);
+      const finalizedRaw = await bytesIfPresent(join(paths.finalizations, id + '.json'));
+      const pendingRaw = await bytesIfPresent(join(paths.pending, id + '.json'));
+      const intentRaw = await bytesIfPresent(join(paths.intents, id + '.json'));
+      let state = 'ABSENT', requestHash = null, result = null, finalizationHash = null;
+      if (finalizedRaw !== null) {
+        const finalized = JSON.parse(finalizedRaw);
+        assert(canonicalize(finalized) === finalizedRaw && finalized.execution_intent_id === id,
+          'durable finalized execution intent tampered');
+        state = 'FINALIZED'; requestHash = finalized.request_hash;
+        result = clone(finalized.result); finalizationHash = sha256(finalized);
+      } else if (pendingRaw !== null) {
+        const pending = JSON.parse(pendingRaw);
+        assert(canonicalize(pending) === pendingRaw && pending.execution_intent_id === id,
+          'durable pending execution intent tampered');
+        state = 'FINALIZATION_PENDING'; requestHash = pending.finalization.request_hash;
+        finalizationHash = sha256(pending.finalization);
+      } else if (intentRaw !== null) {
+        const stored = JSON.parse(intentRaw);
+        assert(canonicalize(stored) === intentRaw && stored.execution_intent_id === id &&
+          stored.record_hash === sha256(canonicalize(stored.record)), 'durable execution intent content address mismatch');
+        state = 'INTENT_STORED'; requestHash = stored.record.request_hash ?? null;
+      }
+      const head = await latestHead();
+      const headEnvelope = head === null ? null : JSON.parse(await readFile(join(paths.heads, HEAD_NAME(head.generation)), 'utf8'));
+      const body = { version: 'phase-a-evidence-authority-observation-1.0.0', authority_id: authorityId,
+        execution_intent_id: id, state, request_hash: requestHash, result,
+        finalization_hash: finalizationHash, authority_head: headEnvelope };
+      assertValidSchema(body, 'calibration-evidence-authority-observation.schema.json');
+      return envelope(body, headKey);
     });
   }
 
@@ -332,7 +385,10 @@ export function createCalibrationEvidenceAuthority({ directory, credential, evid
       }
       const bundle = clone(input.bundle), object = { bundle, service_state: null, analysis_package: null };
       const objectBytes = canonicalize(object), objectHash = sha256(objectBytes);
+      await fault('before_evidence_object_commit', { execution_intent_id: id, event_count: bundle.events.length });
       await immutable(join(paths.objects, objectHash + '.json'), objectBytes);
+      await fault('after_evidence_object_commit_before_attestation', { execution_intent_id: id,
+        event_count: bundle.events.length, evidence_object_hash: objectHash });
       const eventHead = bundle.events.at(-1).integrity.canonical_bytes_hash;
       const archiveBody = { version: 'pilot0-ed25519-archive-v1', run_id: bundle.run_id, key_id: evidenceKeyId,
         generation: 0, parent: null, object_hash: objectHash, event_count: bundle.events.length,
@@ -358,6 +414,7 @@ export function createCalibrationEvidenceAuthority({ directory, credential, evid
         evidence_key_id: evidenceKeyId, evidence_head_key_id: headKeyId };
       assertValidSchema(authorityHeadBody, 'calibration-evidence-authority-head.schema.json');
       const pending = { execution_intent_id: id, finalization, authority_head: envelope(authorityHeadBody, headKey) };
+      await fault('during_final_attempt_attestation', { execution_intent_id: id, generation });
       await immutable(join(paths.pending, id + '.json'), canonicalize(pending));
       await completePending(pending);
       return clone(result);
@@ -365,19 +422,29 @@ export function createCalibrationEvidenceAuthority({ directory, credential, evid
   }
 
   async function handle({ credential: supplied, operation, execution_intent_id, input }) {
-    authenticate(credential, supplied);
-    safeIntent(execution_intent_id);
-    assert(input?.execution_intent_id === execution_intent_id, 'request intent binding malformed');
+    try {
+      authenticate(credential, supplied);
+      safeIntent(execution_intent_id);
+      assert(input?.execution_intent_id === execution_intent_id, 'request intent binding malformed');
+      assert(['GET_EXECUTION_INTENT','OBSERVE_EXECUTION_INTENT','PUT_EXECUTION_INTENT','FINALIZE_EXECUTION_INTENT'].includes(operation),
+        'unsupported evidence authority operation');
+      if (operation === 'PUT_EXECUTION_INTENT') assert(input.record && typeof input.record === 'object' && !Array.isArray(input.record),
+        'malformed execution intent record');
+      if (operation === 'FINALIZE_EXECUTION_INTENT') validateFinalize(input);
+    } catch { throw evidenceAuthorityRequestRejected(); }
     if (typeof authorizeRequest === 'function') await authorizeRequest({ operation, execution_intent_id, input });
     if (operation === 'GET_EXECUTION_INTENT') return { record: await getIntent(execution_intent_id) };
+    if (operation === 'OBSERVE_EXECUTION_INTENT') return { observation: await observeIntent(execution_intent_id) };
     if (operation === 'PUT_EXECUTION_INTENT') return putIntent(execution_intent_id, input.record);
     if (operation === 'FINALIZE_EXECUTION_INTENT') return finalize(input);
     throw new Error('unsupported evidence authority operation');
   }
 
+  const initializeSerialized = () => serialized(async () => ({ version: SERVICE_VERSION, authority_id: authorityId,
+    evidence_key_id: evidenceKeyId, evidence_head_key_id: headKeyId, head: await latestHead() }));
   return Object.freeze({ version: SERVICE_VERSION, trustDomain: 'EXTERNAL_EVIDENCE_AUTHORITY',
-    authorizationScoped: typeof authorizeRequest === 'function' && typeof authorizeFinalization === 'function', initialize,
-    getIntent, putIntent, finalize, handle, evidenceKeyId, evidenceHeadKeyId: headKeyId, authorityId, directory });
+    authorizationScoped: typeof authorizeRequest === 'function' && typeof authorizeFinalization === 'function', initialize: initializeSerialized,
+    getIntent, observeIntent, putIntent, finalize, handle, evidenceKeyId, evidenceHeadKeyId: headKeyId, authorityId, directory });
 }
 
 export async function verifyCalibrationEvidenceAuthority({ directory, evidencePublicKey, evidenceHeadPublicKey, authorityId,
@@ -441,6 +508,7 @@ export function createCalibrationEvidenceAuthorityHttpsServer({ authority, certi
       assert(!server, 'HTTPS evidence authority already started');
       await authority.initialize();
       server = createHttpsServer({ cert: certificate, key: privateKey }, async (request, response) => {
+        let envelopeValidated = false;
         try {
           assert(request.method === 'POST' && request.url === '/v1/execution-intents', 'malformed authority route');
           const chunks = []; let size = 0;
@@ -448,13 +516,16 @@ export function createCalibrationEvidenceAuthorityHttpsServer({ authority, certi
           const message = JSON.parse(Buffer.concat(chunks).toString('utf8'));
           assert(message.version === REQUEST_VERSION && message.execution_intent_id === message.input?.execution_intent_id,
             'malformed authority request envelope');
+          envelopeValidated = true;
           const token = /^Bearer ([^\s]+)$/.exec(request.headers.authorization ?? '')?.[1];
           const result = await authority.handle({ credential: token, operation: message.operation,
             execution_intent_id: message.execution_intent_id, input: message.input });
           response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
           response.end(canonicalize({ execution_intent_id: message.execution_intent_id, ...result }));
-        } catch {
-          response.writeHead(400, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        } catch (error) {
+          response.writeHead(!envelopeValidated ? 400 : ['EVIDENCE_AUTHORITY_BUSY'].includes(error?.code) ? 503
+            : error?.code === 'EVIDENCE_AUTHORITY_REQUEST_REJECTED' ? 400 : 500,
+            { 'content-type': 'application/json', 'cache-control': 'no-store' });
           response.end('{"error":"rejected"}');
         }
       });
